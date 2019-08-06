@@ -22,21 +22,21 @@
 
 #include "QUANTAnet_rbudpReceiver_c.h"
 
+#include <cstdlib>
+#include <cstdio>
+
 int
 main( int argc, char **argv ) {
     struct timeval start, end;
     rbudpReceiver_t *rbudpReceiver;
 
     if ( argc < 5 ) {
-        printf
-        ( "Usage: recvfile <sender> <path to the orig file> <path to the dest file name> <MTU>\n" );
-        printf
-        ( " \n Example : recvfile <192.168.81.100 /path/to/file/on/sender /path/to/file/on/receiver 9000 \n" );
+        printf( "Usage: recvfile <sender> <path to the orig file> <path to the dest file name> <MTU>\n" );
+        printf( " \n Example : recvfile <192.168.81.100 /path/to/file/on/sender /path/to/file/on/receiver 9000 \n" );
         exit( 1 );
     }
 
-
-    rbudpReceiver = malloc( sizeof( rbudpReceiver_t ) );
+    rbudpReceiver = static_cast<rbudpReceiver_t*>(malloc( sizeof( rbudpReceiver_t ) ));
     memset( rbudpReceiver, 0, sizeof( rbudpReceiver_t ) );
 
     // the constructor
@@ -52,6 +52,7 @@ main( int argc, char **argv ) {
     gettimeofday( &end, NULL );
     recvClose( rbudpReceiver );
 
-    printf( "time consumed: %d microseconds\n", USEC( &start, &end ) );
+    printf( "time consumed: %ld microseconds\n", USEC( &start, &end ) );
+
     return 1;
 }

@@ -22,8 +22,11 @@
 
 #include "QUANTAnet_rbudpSender_c.h"
 
-int
-main( int argc, char **argv ) {
+#include <cstdlib>
+#include <cstdio>
+
+int main( int argc, char **argv )
+{
     int sendRate;
     rbudpSender_t *rbudpSender;
 
@@ -34,7 +37,7 @@ main( int argc, char **argv ) {
 
     sendRate = atoi( argv[2] );
     // QUANTAnet_rbudpSender_c *mysender = new QUANTAnet_rbudpSender_c (38000);
-    rbudpSender = malloc( sizeof( rbudpSender_t ) );
+    rbudpSender = static_cast<rbudpSender_t*>(malloc( sizeof( rbudpSender_t ) ));
     memset( rbudpSender, 0, sizeof( rbudpSender_t ) );
 
     // the constructor
@@ -49,5 +52,6 @@ main( int argc, char **argv ) {
 
     // mysender->close ();
     sendClose( rbudpSender );
+
     return 1;
 }
