@@ -14,15 +14,16 @@
 #include "packStruct.h"
 #include "irods_lookup_table.hpp"
 #include "irods_plugin_base.hpp"
-//#include "irods_re_ruleexistshelper.hpp"
 #include "irods_stacktrace.hpp"
 #include "boost/shared_ptr.hpp"
 #include "boost/any.hpp"
 #include "irods_pack_table.hpp"
 
-//#include "irods_re_namespaceshelper.hpp"
-//#include "irods_re_plugin.hpp"
-//#include "irods_re_ruleexistshelper.hpp"
+#ifdef ENABLE_RE
+    #include "irods_re_ruleexistshelper.hpp"
+    #include "irods_re_namespaceshelper.hpp"
+    #include "irods_re_plugin.hpp"
+#endif // ENABLE_RE
 
 #ifdef IRODS_ENABLE_SYSLOG
     #include "irods_logger.hpp"
@@ -182,7 +183,7 @@ namespace irods {
                     try {
                         typedef std::function<int(rsComm_t*, types_t...)> fcn_t;
                         fcn_t fcn = boost::any_cast<fcn_t>( operations_[ operation_name ] );
-                        #ifdef ENABLE_RE
+#ifdef ENABLE_RE
                         irods::plugin_property_map prop_map;
                         irods::plugin_context ctx(_comm,prop_map);
                         ruleExecInfo_t rei;
@@ -263,9 +264,9 @@ namespace irods {
 
                         return op_err.code();
 
-                        #else
+#else
                         return fcn(_comm, _t...);
-                        #endif
+#endif
                     }
                     catch( const boost::bad_any_cast& ) {
                         std::string msg( "failed for call - " );
@@ -323,6 +324,7 @@ namespace irods {
                 std::function<void( void* )> clearInStruct;		//free input struct function
 
         private:
+#ifdef ENABLE_RE
             template<typename... types_t>
             error invoke_policy_enforcement_point(
                 rule_engine_context_manager<
@@ -365,6 +367,7 @@ namespace irods {
                 return saved_op_err;
 
             } // invoke_policy_enforcement_point
+#endif
     }; // class api_entry
 
     typedef boost::shared_ptr< api_entry > api_entry_ptr;

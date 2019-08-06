@@ -261,10 +261,6 @@ target_include_directories(${IRODS_LIBRARY_NAME}
                            ${CMAKE_SOURCE_DIR}/include/core
                            ${CMAKE_SOURCE_DIR}/include/hasher
                            ${CMAKE_SOURCE_DIR}/include/rbudp
-                           #${CMAKE_SOURCE_DIR}/server/core/include
-                           #${CMAKE_SOURCE_DIR}/server/drivers/include
-                           #${CMAKE_SOURCE_DIR}/server/icat/include
-                           #${CMAKE_SOURCE_DIR}/server/re/include
                            ${OPENSSL_INCLUDE_DIR}
                            /opt/irods-externals/boost1.67.0-0/include
                            /opt/irods-externals/json3.1.2-0/include
