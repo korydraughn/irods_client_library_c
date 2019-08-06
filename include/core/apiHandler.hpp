@@ -14,21 +14,21 @@
 #include "packStruct.h"
 #include "irods_lookup_table.hpp"
 #include "irods_plugin_base.hpp"
-#include "irods_re_ruleexistshelper.hpp"
+//#include "irods_re_ruleexistshelper.hpp"
 #include "irods_stacktrace.hpp"
 #include "boost/shared_ptr.hpp"
 #include "boost/any.hpp"
 #include "irods_pack_table.hpp"
 
-#include "irods_re_namespaceshelper.hpp"
-#include "irods_re_plugin.hpp"
-#include "irods_re_ruleexistshelper.hpp"
+//#include "irods_re_namespaceshelper.hpp"
+//#include "irods_re_plugin.hpp"
+//#include "irods_re_ruleexistshelper.hpp"
 
 #ifdef IRODS_ENABLE_SYSLOG
-#include "irods_logger.hpp"
-#include "rcMisc.h"
-#include <type_traits>
-#include <typeinfo>
+    #include "irods_logger.hpp"
+    #include "rcMisc.h"
+    #include <type_traits>
+    #include <typeinfo>
 #endif // IRODS_ENABLE_SYSLOG
 
 #include <functional>

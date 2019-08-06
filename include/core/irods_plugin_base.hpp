@@ -5,15 +5,15 @@
 
 #include <boost/function.hpp>
 
-#include "irods_re_structs.hpp"
+//#include "irods_re_structs.hpp"
 #include "rcConnect.h"
 
 
-#ifdef ENABLE_RE
-#include "irods_re_namespaceshelper.hpp"
-#include "irods_re_plugin.hpp"
-#include "irods_re_ruleexistshelper.hpp"
-#endif
+//#ifdef ENABLE_RE
+//#include "irods_re_namespaceshelper.hpp"
+//#include "irods_re_plugin.hpp"
+//#include "irods_re_ruleexistshelper.hpp"
+//#endif
 #include "irods_error.hpp"
 #include "irods_lookup_table.hpp"
 #include "irods_plugin_context.hpp"
