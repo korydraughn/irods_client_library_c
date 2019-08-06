@@ -40,6 +40,5 @@ typedef struct rescQuota {
 #define GLOBAL_QUOTA    0x1     // the quota is global
 
 int rcGetRescQuota( rcComm_t *conn, getRescQuotaInp_t *getRescQuotaInp, rescQuota_t **rescQuota );
-int freeAllRescQuota( rescQuota_t *rescQuotaHead );
 
 #endif  // GET_RESC_QUOTA_H__

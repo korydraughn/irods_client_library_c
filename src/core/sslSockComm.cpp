@@ -3,7 +3,6 @@
 /* sslSockComm.c - SSL socket communication routines
  */
 
-
 #include "rodsClient.h"
 #include "sslSockComm.h"
 #include "irods_client_server_negotiation.hpp"
@@ -13,26 +12,18 @@
 // =-=-=-=-=-=-=-
 // work around for SSL Macro version issues
 #if OPENSSL_VERSION_NUMBER < 0x10100000
-#define ASN1_STRING_get0_data ASN1_STRING_data
-#define DH_set0_pqg(dh_, p_, q_, g_) \
-    dh_->p = p_; \
-    dh_->q = q_; \
-    dh_->g = g_;
+    #define ASN1_STRING_get0_data ASN1_STRING_data
 #endif
-
-
 
 /* module internal functions */
 static SSL_CTX *sslInit( char *certfile, char *keyfile );
 static SSL *sslInitSocket( SSL_CTX *ctx, int sock );
 static void sslLogError( char *msg );
-static DH *get_dh2048();
-static int sslLoadDHParams( SSL_CTX *ctx, char *file );
+
 static int sslVerifyCallback( int ok, X509_STORE_CTX *store );
 static int sslPostConnectionCheck( SSL *ssl, char *peer );
 
-int
-sslStart( rcComm_t *rcComm ) {
+int sslStart( rcComm_t *rcComm ) {
     int status;
     sslStartInp_t sslStartInp;
 
@@ -91,8 +82,7 @@ sslStart( rcComm_t *rcComm ) {
     return 0;
 }
 
-int
-sslEnd( rcComm_t *rcComm ) {
+int sslEnd( rcComm_t *rcComm ) {
     int status;
     sslEndInp_t sslEndInp;
 
@@ -138,429 +128,7 @@ sslEnd( rcComm_t *rcComm ) {
     return 0;
 }
 
-int
-sslAccept( rsComm_t *rsComm ) {
-    rodsEnv env;
-    int status = getRodsEnv( &env );
-    if ( status < 0 ) {
-        rodsLog(
-            LOG_ERROR,
-            "sslAccept - failed in getRodsEnv : %d",
-            status );
-        return status;
-    }
-
-    /* set up the context using a certificate file and separate
-       keyfile passed through environment variables */
-    rsComm->ssl_ctx = sslInit( env.irodsSSLCertificateChainFile,
-                               env.irodsSSLCertificateKeyFile );
-    if ( rsComm->ssl_ctx == NULL ) {
-        rodsLog( LOG_ERROR, "sslAccept: couldn't initialize SSL context" );
-        return SSL_INIT_ERROR;
-    }
-
-    status = sslLoadDHParams( rsComm->ssl_ctx, env.irodsSSLDHParamsFile );
-    if ( status < 0 ) {
-        rodsLog( LOG_ERROR, "sslAccept: error setting Diffie-Hellman parameters" );
-        SSL_CTX_free( rsComm->ssl_ctx );
-        rsComm->ssl_ctx = NULL;
-        return SSL_INIT_ERROR;
-    }
-
-    rsComm->ssl = sslInitSocket( rsComm->ssl_ctx, rsComm->sock );
-    if ( rsComm->ssl == NULL ) {
-        rodsLog( LOG_ERROR, "sslAccept: couldn't initialize SSL socket" );
-        SSL_CTX_free( rsComm->ssl_ctx );
-        rsComm->ssl_ctx = NULL;
-        return SSL_INIT_ERROR;
-    }
-
-    status = SSL_accept( rsComm->ssl );
-    if ( status < 1 ) {
-        sslLogError( "sslAccept: error calling SSL_accept" );
-        return SSL_HANDSHAKE_ERROR;
-    }
-
-    rsComm->ssl_on = 1;
-    snprintf( rsComm->negotiation_results, sizeof( rsComm->negotiation_results ),
-              "%s", irods::CS_NEG_USE_SSL.c_str() );
-
-    rodsLog( LOG_DEBUG, "sslAccept: accepted SSL connection" );
-
-    return 0;
-}
-
-int
-sslShutdown( rsComm_t *rsComm ) {
-    int status;
-
-    /* shut down the SSL connection. Might need to call SSL_shutdown()
-       twice to allow the protocol to notify and then complete
-       the shutdown. */
-    status = SSL_shutdown( rsComm->ssl );
-    if ( status == 0 ) {
-        /* second phase of shutdown */
-        status = SSL_shutdown( rsComm->ssl );
-    }
-    if ( status != 1 ) {
-        sslLogError( "sslShutdown: error completing shutdown of SSL connection" );
-        return SSL_SHUTDOWN_ERROR;
-    }
-
-    /* clean up the SSL state */
-    SSL_free( rsComm->ssl );
-    rsComm->ssl = NULL;
-    SSL_CTX_free( rsComm->ssl_ctx );
-    rsComm->ssl_ctx = NULL;
-    rsComm->ssl_on = 0;
-
-    snprintf( rsComm->negotiation_results, sizeof( rsComm->negotiation_results ),
-              "%s", irods::CS_NEG_USE_TCP.c_str() );
-    rodsLog( LOG_DEBUG, "sslShutdown: shut down SSL connection" );
-
-    return 0;
-}
-
-
-int
-sslReadMsgHeader( int sock, msgHeader_t *myHeader, struct timeval *tv, SSL *ssl ) {
-    int nbytes;
-    int myLen;
-    char tmpBuf[MAX_NAME_LEN];
-    msgHeader_t *outHeader;
-    int status;
-
-    /* read the header length packet */
-
-    nbytes = sslRead( sock, ( void * ) &myLen, sizeof( myLen ),
-                      NULL, tv, ssl );
-    if ( nbytes != sizeof( myLen ) ) {
-        if ( nbytes < 0 ) {
-            status = nbytes - errno;
-        }
-        else {
-            status = SYS_HEADER_READ_LEN_ERR - errno;
-        }
-        rodsLog( LOG_ERROR,
-                 "sslReadMsgHeader:header read- read %d bytes, expect %d, status = %d",
-                 nbytes, sizeof( myLen ), status );
-        return status;
-    }
-
-    myLen =  ntohl( myLen );
-    if ( myLen > MAX_NAME_LEN || myLen <= 0 ) {
-        rodsLog( LOG_ERROR,
-                 "sslReadMsgHeader: header length %d out of range",
-                 myLen );
-        return SYS_HEADER_READ_LEN_ERR;
-    }
-
-    nbytes = sslRead( sock, ( void * ) tmpBuf, myLen, NULL, tv, ssl );
-
-    if ( nbytes != myLen ) {
-        if ( nbytes < 0 ) {
-            status = nbytes - errno;
-        }
-        else {
-            status = SYS_HEADER_READ_LEN_ERR - errno;
-        }
-        rodsLog( LOG_ERROR,
-                 "sslReadMsgHeader:header read- read %d bytes, expect %d, status = %d",
-                 nbytes, myLen, status );
-        return status;
-    }
-
-    if ( getRodsLogLevel() >= LOG_DEBUG8 ) {
-        printf( "received header: len = %d\n%s\n", myLen, tmpBuf );
-    }
-
-    /* always use XML_PROT for the startup pack */
-    status = unpackStruct( ( void * ) tmpBuf, ( void ** )( static_cast<void *>( &outHeader ) ),
-                           "MsgHeader_PI", RodsPackTable, XML_PROT );
-
-    if ( status < 0 ) {
-        rodsLogError( LOG_ERROR,  status,
-                      "sslReadMsgHeader:unpackStruct error. status = %d",
-                      status );
-        return status;
-    }
-
-    *myHeader = *outHeader;
-
-    free( outHeader );
-
-    return 0;
-}
-
-int
-sslReadMsgBody( int sock, msgHeader_t *myHeader, bytesBuf_t *inputStructBBuf,
-                bytesBuf_t *bsBBuf, bytesBuf_t *errorBBuf, irodsProt_t irodsProt,
-                struct timeval *tv, SSL *ssl ) {
-    int nbytes;
-    int bytesRead;
-
-    if ( myHeader == NULL ) {
-        return SYS_READ_MSG_BODY_INPUT_ERR;
-    }
-    if ( inputStructBBuf != NULL ) {
-        memset( inputStructBBuf, 0, sizeof( bytesBuf_t ) );
-    }
-
-    /* Don't memset bsBBuf because bsBBuf can be reused on the client side */
-
-    if ( errorBBuf != NULL ) {
-        memset( errorBBuf, 0, sizeof( bytesBuf_t ) );
-    }
-
-    if ( myHeader->msgLen > 0 ) {
-        if ( inputStructBBuf == NULL ) {
-            return SYS_READ_MSG_BODY_INPUT_ERR;
-        }
-
-        inputStructBBuf->buf = malloc( myHeader->msgLen );
-
-        nbytes = sslRead( sock, inputStructBBuf->buf, myHeader->msgLen,
-                          NULL, tv, ssl );
-
-        if ( irodsProt == XML_PROT && getRodsLogLevel() >= LOG_DEBUG8 ) {
-            printf( "received msg: \n%s\n", ( char * ) inputStructBBuf->buf );
-        }
-
-        if ( nbytes != myHeader->msgLen ) {
-            rodsLog( LOG_NOTICE,
-                     "sslReadMsgBody: inputStruct read error, read %d bytes, expect %d",
-                     nbytes, myHeader->msgLen );
-            free( inputStructBBuf->buf );
-            return SYS_HEADER_READ_LEN_ERR;
-        }
-        inputStructBBuf->len = myHeader->msgLen;
-    }
-
-    if ( myHeader->errorLen > 0 ) {
-        if ( errorBBuf == NULL ) {
-            return SYS_READ_MSG_BODY_INPUT_ERR;
-        }
-
-        errorBBuf->buf = malloc( myHeader->errorLen );
-
-        nbytes = sslRead( sock, errorBBuf->buf, myHeader->errorLen,
-                          NULL, tv, ssl );
-
-        if ( irodsProt == XML_PROT && getRodsLogLevel() >= LOG_DEBUG8 ) {
-            printf( "received error msg: \n%s\n", ( char * ) errorBBuf->buf );
-        }
-
-        if ( nbytes != myHeader->errorLen ) {
-            rodsLog( LOG_NOTICE,
-                     "sslReadMsgBody: errorBbuf read error, read %d bytes, expect %d, errno = %d",
-                     nbytes, myHeader->msgLen, errno );
-            free( errorBBuf->buf );
-            return SYS_READ_MSG_BODY_LEN_ERR - errno;
-        }
-        errorBBuf->len = myHeader->errorLen;
-    }
-
-    if ( myHeader->bsLen > 0 ) {
-        if ( bsBBuf == NULL ) {
-            return SYS_READ_MSG_BODY_INPUT_ERR;
-        }
-
-        if ( bsBBuf->buf == NULL ) {
-            bsBBuf->buf = malloc( myHeader->bsLen );
-        }
-        else if ( myHeader->bsLen > bsBBuf->len ) {
-            free( bsBBuf->buf );
-            bsBBuf->buf = malloc( myHeader->bsLen );
-        }
-
-        nbytes = sslRead( sock, bsBBuf->buf, myHeader->bsLen,
-                          &bytesRead, tv, ssl );
-
-        if ( nbytes != myHeader->bsLen ) {
-            rodsLog( LOG_NOTICE,
-                     "sslReadMsgBody: bsBBuf read error, read %d bytes, expect %d, errno = %d",
-                     nbytes, myHeader->bsLen, errno );
-            free( bsBBuf->buf );
-            return SYS_READ_MSG_BODY_INPUT_ERR - errno;
-        }
-        bsBBuf->len = myHeader->bsLen;
-    }
-
-    return 0;
-}
-
-int
-sslWriteMsgHeader( msgHeader_t *myHeader, SSL *ssl ) {
-    int nbytes;
-    int status;
-    int myLen;
-    bytesBuf_t *headerBBuf = NULL;
-
-    /* always use XML_PROT for the Header */
-    status = packStruct( ( void * ) myHeader, &headerBBuf,
-                         "MsgHeader_PI", RodsPackTable, 0, XML_PROT );
-
-    if ( status < 0 ) {
-        rodsLogError( LOG_ERROR, status,
-                      "sslWriteMsgHeader: packStruct error, status = %d", status );
-        return status;
-    }
-
-    if ( getRodsLogLevel() >= LOG_DEBUG8 ) {
-        printf( "sending header: len = %d\n%s\n", headerBBuf->len,
-                ( char * ) headerBBuf->buf );
-    }
-
-    myLen = htonl( headerBBuf->len );
-
-    nbytes = sslWrite( ( void * ) &myLen, sizeof( myLen ), NULL, ssl );
-
-    if ( nbytes != sizeof( myLen ) ) {
-        rodsLog( LOG_ERROR,
-                 "sslWriteMsgHeader: wrote %d bytes for myLen , expect %d, status = %d",
-                 nbytes, sizeof( myLen ), SYS_HEADER_WRITE_LEN_ERR - errno );
-        freeBBuf( headerBBuf );
-        return SYS_HEADER_WRITE_LEN_ERR - errno;
-    }
-
-    /* now send the header */
-
-    nbytes = sslWrite( headerBBuf->buf, headerBBuf->len, NULL, ssl );
-
-    if ( headerBBuf->len != nbytes ) {
-        rodsLog( LOG_ERROR,
-                 "sslWriteMsgHeader: wrote %d bytes, expect %d, status = %d",
-                 nbytes, headerBBuf->len, SYS_HEADER_WRITE_LEN_ERR - errno );
-        freeBBuf( headerBBuf );
-        return SYS_HEADER_WRITE_LEN_ERR - errno;
-    }
-
-    freeBBuf( headerBBuf );
-
-    return 0;
-}
-
-int
-sslSendRodsMsg( char *msgType, bytesBuf_t *msgBBuf,
-                bytesBuf_t *byteStreamBBuf, bytesBuf_t *errorBBuf, int intInfo,
-                irodsProt_t irodsProt, SSL *ssl ) {
-    int status;
-    msgHeader_t msgHeader;
-    int bytesWritten;
-
-    memset( &msgHeader, 0, sizeof( msgHeader ) );
-
-    rstrcpy( msgHeader.type, msgType, HEADER_TYPE_LEN );
-
-    msgHeader.msgLen = msgBBuf ? msgBBuf->len : 0;
-    msgHeader.bsLen = byteStreamBBuf ? byteStreamBBuf->len : 0;
-    msgHeader.errorLen = errorBBuf ? errorBBuf->len : 0;
-
-    msgHeader.intInfo = intInfo;
-
-    status = sslWriteMsgHeader( &msgHeader, ssl );
-
-    if ( status < 0 ) {
-        return status;
-    }
-
-    /* send the rest */
-
-    if ( msgBBuf && msgBBuf->len > 0 ) {
-        if ( irodsProt == XML_PROT && getRodsLogLevel() >= LOG_DEBUG8 ) {
-            printf( "sending msg: \n%s\n", ( char * ) msgBBuf->buf );
-        }
-        status = sslWrite( msgBBuf->buf, msgBBuf->len, NULL, ssl );
-        if ( status < 0 ) {
-            return status;
-        }
-    }
-
-    if ( errorBBuf && errorBBuf->len > 0 ) {
-        if ( irodsProt == XML_PROT && getRodsLogLevel() >= LOG_DEBUG8 ) {
-            printf( "sending error msg: \n%s\n", ( char * ) errorBBuf->buf );
-        }
-        status = sslWrite( errorBBuf->buf, errorBBuf->len,
-                           NULL, ssl );
-        if ( status < 0 ) {
-            return status;
-        }
-    }
-    if ( byteStreamBBuf && byteStreamBBuf->len > 0 ) {
-        status = sslWrite( byteStreamBBuf->buf, byteStreamBBuf->len,
-                           &bytesWritten, ssl );
-        if ( status < 0 ) {
-            return status;
-        }
-    }
-
-    return 0;
-}
-
-int
-sslRead( int sock, void *buf, int len,
-         int *bytesRead, struct timeval *tv, SSL *ssl ) {
-    struct timeval timeout;
-
-    /* Initialize the file descriptor set. */
-    fd_set set;
-    FD_ZERO( &set );
-    FD_SET( sock, &set );
-    if ( tv != NULL ) {
-        timeout = *tv;
-    }
-
-    int toRead = len;
-    char *tmpPtr = ( char * ) buf;
-
-    if ( bytesRead != NULL ) {
-        *bytesRead = 0;
-    }
-
-    while ( toRead > 0 ) {
-        if ( SSL_pending( ssl ) == 0 && tv != NULL ) {
-            const int status = select( sock + 1, &set, NULL, NULL, &timeout );
-            if ( status == 0 ) {
-                /* timedout */
-                if ( len - toRead > 0 ) {
-                    return len - toRead;
-                }
-                else {
-                    return SYS_SOCK_READ_TIMEDOUT;
-                }
-            }
-            else if ( status < 0 ) {
-                if ( errno == EINTR ) {
-                    continue;
-                }
-                else {
-                    return SYS_SOCK_READ_ERR - errno;
-                }
-            }
-        }
-        int nbytes = SSL_read( ssl, ( void * ) tmpPtr, toRead );
-        if ( SSL_get_error( ssl, nbytes ) != SSL_ERROR_NONE ) {
-            if ( errno == EINTR ) {
-                /* interrupted */
-                errno = 0;
-                nbytes = 0;
-            }
-            else {
-                break;
-            }
-        }
-
-        toRead -= nbytes;
-        tmpPtr += nbytes;
-        if ( bytesRead != NULL ) {
-            *bytesRead += nbytes;
-        }
-    }
-    return len - toRead;
-}
-
-int
-sslWrite( void *buf, int len,
+int sslWrite( void *buf, int len,
           int *bytesWritten, SSL *ssl ) {
     int nbytes;
     int toWrite;
@@ -596,8 +164,7 @@ sslWrite( void *buf, int len,
 
 /* Module internal support functions */
 
-static SSL_CTX*
-sslInit( char *certfile, char *keyfile ) {
+static SSL_CTX* sslInit( char *certfile, char *keyfile ) {
     static int init_done = 0;
 
     rodsEnv env;
@@ -677,8 +244,7 @@ sslInit( char *certfile, char *keyfile ) {
     return ctx;
 }
 
-static SSL*
-sslInitSocket( SSL_CTX *ctx, int sock ) {
+static SSL* sslInitSocket( SSL_CTX *ctx, int sock ) {
     SSL *ssl;
     BIO *bio;
 
@@ -698,8 +264,7 @@ sslInitSocket( SSL_CTX *ctx, int sock ) {
     return ssl;
 }
 
-static void
-sslLogError( char *msg ) {
+static void sslLogError( char *msg ) {
     unsigned long err;
     char buf[512];
 
@@ -709,91 +274,7 @@ sslLogError( char *msg ) {
     }
 }
 
-/* This function returns a set of built-in Diffie-Hellman
-   parameters. We could read the parameters from a file instead,
-   but this is a reasonably strong prime. The parameters come from
-   the openssl distribution's 'apps' sub-directory. Comment from
-   the source file is:
-
-   These are the 2048 bit DH parameters from "Assigned Number for SKIP Protocols"
-   (http://www.skip-vpn.org/spec/numbers.html).
-   See there for how they were generated. */
-
-static DH*
-get_dh2048() {
-    static unsigned char dh2048_p[] = {
-        0xF6, 0x42, 0x57, 0xB7, 0x08, 0x7F, 0x08, 0x17, 0x72, 0xA2, 0xBA, 0xD6,
-        0xA9, 0x42, 0xF3, 0x05, 0xE8, 0xF9, 0x53, 0x11, 0x39, 0x4F, 0xB6, 0xF1,
-        0x6E, 0xB9, 0x4B, 0x38, 0x20, 0xDA, 0x01, 0xA7, 0x56, 0xA3, 0x14, 0xE9,
-        0x8F, 0x40, 0x55, 0xF3, 0xD0, 0x07, 0xC6, 0xCB, 0x43, 0xA9, 0x94, 0xAD,
-        0xF7, 0x4C, 0x64, 0x86, 0x49, 0xF8, 0x0C, 0x83, 0xBD, 0x65, 0xE9, 0x17,
-        0xD4, 0xA1, 0xD3, 0x50, 0xF8, 0xF5, 0x59, 0x5F, 0xDC, 0x76, 0x52, 0x4F,
-        0x3D, 0x3D, 0x8D, 0xDB, 0xCE, 0x99, 0xE1, 0x57, 0x92, 0x59, 0xCD, 0xFD,
-        0xB8, 0xAE, 0x74, 0x4F, 0xC5, 0xFC, 0x76, 0xBC, 0x83, 0xC5, 0x47, 0x30,
-        0x61, 0xCE, 0x7C, 0xC9, 0x66, 0xFF, 0x15, 0xF9, 0xBB, 0xFD, 0x91, 0x5E,
-        0xC7, 0x01, 0xAA, 0xD3, 0x5B, 0x9E, 0x8D, 0xA0, 0xA5, 0x72, 0x3A, 0xD4,
-        0x1A, 0xF0, 0xBF, 0x46, 0x00, 0x58, 0x2B, 0xE5, 0xF4, 0x88, 0xFD, 0x58,
-        0x4E, 0x49, 0xDB, 0xCD, 0x20, 0xB4, 0x9D, 0xE4, 0x91, 0x07, 0x36, 0x6B,
-        0x33, 0x6C, 0x38, 0x0D, 0x45, 0x1D, 0x0F, 0x7C, 0x88, 0xB3, 0x1C, 0x7C,
-        0x5B, 0x2D, 0x8E, 0xF6, 0xF3, 0xC9, 0x23, 0xC0, 0x43, 0xF0, 0xA5, 0x5B,
-        0x18, 0x8D, 0x8E, 0xBB, 0x55, 0x8C, 0xB8, 0x5D, 0x38, 0xD3, 0x34, 0xFD,
-        0x7C, 0x17, 0x57, 0x43, 0xA3, 0x1D, 0x18, 0x6C, 0xDE, 0x33, 0x21, 0x2C,
-        0xB5, 0x2A, 0xFF, 0x3C, 0xE1, 0xB1, 0x29, 0x40, 0x18, 0x11, 0x8D, 0x7C,
-        0x84, 0xA7, 0x0A, 0x72, 0xD6, 0x86, 0xC4, 0x03, 0x19, 0xC8, 0x07, 0x29,
-        0x7A, 0xCA, 0x95, 0x0C, 0xD9, 0x96, 0x9F, 0xAB, 0xD0, 0x0A, 0x50, 0x9B,
-        0x02, 0x46, 0xD3, 0x08, 0x3D, 0x66, 0xA4, 0x5D, 0x41, 0x9F, 0x9C, 0x7C,
-        0xBD, 0x89, 0x4B, 0x22, 0x19, 0x26, 0xBA, 0xAB, 0xA2, 0x5E, 0xC3, 0x55,
-        0xE9, 0x32, 0x0B, 0x3B,
-    };
-    static unsigned char dh2048_g[] = {
-        0x02,
-    };
-    auto *dh = DH_new();
-
-    if ( !dh ) {
-        return NULL;
-    }
-    auto* p = BN_bin2bn( dh2048_p, sizeof( dh2048_p ), NULL );
-    auto* g = BN_bin2bn( dh2048_g, sizeof( dh2048_g ), NULL );
-    if ( !p || !g ) {
-        DH_free( dh );
-        return NULL;
-    }
-    DH_set0_pqg(dh, p, nullptr, g);
-    return dh;
-}
-
-static int
-sslLoadDHParams( SSL_CTX *ctx, char *file ) {
-    DH *dhparams = NULL;
-    BIO *bio;
-
-    if ( file ) {
-        bio = BIO_new_file( file, "r" );
-        if ( bio ) {
-            dhparams = PEM_read_bio_DHparams( bio, NULL, NULL, NULL );
-            BIO_free( bio );
-        }
-    }
-
-    if ( dhparams == NULL ) {
-        sslLogError( "sslLoadDHParams: can't load DH parameter file. Falling back to built-ins." );
-        dhparams = get_dh2048();
-        if ( dhparams == NULL ) {
-            rodsLog( LOG_ERROR, "sslLoadDHParams: can't load built-in DH params" );
-            return -1;
-        }
-    }
-
-    if ( SSL_CTX_set_tmp_dh( ctx, dhparams ) < 0 ) {
-        sslLogError( "sslLoadDHParams: couldn't set DH parameters" );
-        return -1;
-    }
-    return 0;
-}
-
-static int
-sslVerifyCallback( int ok, X509_STORE_CTX *store ) {
+static int sslVerifyCallback( int ok, X509_STORE_CTX *store ) {
     char data[256];
 
     /* log any verification problems, even if we'll still accept the cert */
@@ -814,8 +295,7 @@ sslVerifyCallback( int ok, X509_STORE_CTX *store ) {
     return ok;
 }
 
-static int
-sslPostConnectionCheck( SSL *ssl, char *peer ) {
+static int sslPostConnectionCheck( SSL *ssl, char *peer ) {
     rodsEnv env;
     int status = getRodsEnv( &env );
     if ( status < 0 ) {

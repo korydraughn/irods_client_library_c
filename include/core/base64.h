@@ -3,9 +3,6 @@
 
 /* base64.h - header file for base64.c
  */
-
-
-
 #ifndef BASE64_H__
 #define BASE64_H__
 

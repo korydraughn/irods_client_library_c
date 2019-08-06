@@ -2179,42 +2179,6 @@ rmFilesInDir( char *mydir ) {
     }
     return savedStatus;
 }
-int
-getNumFilesInDir( const char *mydir ) {
-    using namespace boost::filesystem;
-    int status = 0;
-    int savedStatus = 0;
-    char childPath[MAX_NAME_LEN];
-    int count = 0;
-
-    path srcDirPath( mydir );
-    if ( !exists( srcDirPath ) || !is_directory( srcDirPath ) ) {
-        status = USER_INPUT_PATH_ERR - errno;
-        rodsLogError( LOG_ERROR, status,
-                      "getNumFilesInDir: opendir local dir error for %s", mydir );
-        return status;
-    }
-    directory_iterator end_itr; // default construction yields past-the-end
-    for ( directory_iterator itr( srcDirPath ); itr != end_itr; ++itr ) {
-        path p = itr->path();
-        snprintf( childPath, MAX_NAME_LEN, "%s",
-                  p.c_str() );
-        if ( !exists( p ) ) {
-            savedStatus = USER_INPUT_PATH_ERR - errno;
-            rodsLogError( LOG_ERROR, savedStatus,
-                          "getNumFilesInDir: stat error for %s", childPath );
-            continue;
-        }
-        if ( is_regular_file( p ) ) {
-            count++;
-        }
-        else {
-            continue;
-        }
-
-    }
-    return count;
-}
 
 pathnamePatterns_t *
 readPathnamePatterns( char *buf, int buflen ) {

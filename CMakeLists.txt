@@ -13,7 +13,7 @@ find_package(Boost REQUIRED)
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-set(IRODS_LIBRARY_NAME irods)
+set(IRODS_LIBRARY_NAME irods_client_c)
 
 set(IRODS_LIBRARY_VERSION_MAJOR "0")
 set(IRODS_LIBRARY_VERSION_MINOR "0")
@@ -156,40 +156,89 @@ set(IRODS_API_SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/api/rcZoneReport.cpp)
 
 set(IRODS_CORE_SOURCE_FILES
+    ${CMAKE_SOURCE_DIR}/src/core/apiHandler.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/base64.cpp
     ${CMAKE_SOURCE_DIR}/src/core/clientLogin.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/getRodsEnv.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/hashtable.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_auth_factory.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_auth_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_auth_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_buffer_encryption.cpp
     ${CMAKE_SOURCE_DIR}/src/core/irods_c_api.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_children_parser.cpp
     ${CMAKE_SOURCE_DIR}/src/core/irods_client_api_table.cpp
     ${CMAKE_SOURCE_DIR}/src/core/irods_client_negotiation.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_configuration_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_default_paths.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_environment_properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_error.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_exception.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_generic_auth_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_get_full_path_for_config_file.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_gsi_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_hierarchy_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_hostname.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_krb_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_kvp_string_parser.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_log.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_native_auth_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_network_factory.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_network_manager.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_network_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_osauth_auth_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_pack_table.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_pam_auth_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_parse_command_line_options.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_path_recursion.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_pluggable_auth_scheme.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_plugin_name_generator.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_random.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_serialization.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_server_properties.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_socket_information.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_ssl_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_stacktrace.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_string_tokenize.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_tcp_object.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/irods_virtual_path.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/list.cpp
     ${CMAKE_SOURCE_DIR}/src/core/miscUtil.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/msParam.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/obf.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/osauth.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/packStruct.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/parseCommandLine.cpp
     ${CMAKE_SOURCE_DIR}/src/core/procApiRequest.cpp
     ${CMAKE_SOURCE_DIR}/src/core/rcConnect.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rcGlobal.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rcMisc.cpp
     ${CMAKE_SOURCE_DIR}/src/core/rcPortalOpr.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/region.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rodsLog.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/rodsPath.cpp
     ${CMAKE_SOURCE_DIR}/src/core/sockComm.cpp
-    ${CMAKE_SOURCE_DIR}/src/core/sslSockComm.cpp)
+    ${CMAKE_SOURCE_DIR}/src/core/sslSockComm.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/stringOpr.cpp)
 
 set(IRODS_HASHER_SOURCE_FILES
-    ${CMAKE_SOURCE_DIR}/src/hasher/checksum.cpp
     ${CMAKE_SOURCE_DIR}/src/hasher/Hasher.cpp
-    ${CMAKE_SOURCE_DIR}/src/hasher/irods_hasher_factory.cpp
     ${CMAKE_SOURCE_DIR}/src/hasher/MD5Strategy.cpp
-    ${CMAKE_SOURCE_DIR}/src/hasher/SHA256Strategy.cpp)
+    ${CMAKE_SOURCE_DIR}/src/hasher/SHA256Strategy.cpp
+    ${CMAKE_SOURCE_DIR}/src/hasher/checksum.cpp
+    ${CMAKE_SOURCE_DIR}/src/hasher/irods_hasher_factory.cpp)
 
 set(IRODS_RBUDP_SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/rbudp/QUANTAnet_rbudpBase_c.cpp
     ${CMAKE_SOURCE_DIR}/src/rbudp/QUANTAnet_rbudpReceiver_c.cpp
     ${CMAKE_SOURCE_DIR}/src/rbudp/QUANTAnet_rbudpSender_c.cpp)
 
-set(IRODS_SERVER_SOURCE_FILES
-    ${CMAKE_SOURCE_DIR}/server/core/src/rodsConnect.cpp
-    ${CMAKE_SOURCE_DIR}/server/drivers/src/fileDriver.cpp)
-
 add_library(${IRODS_LIBRARY_NAME}
             SHARED
             ${IRODS_API_SOURCE_FILES}
             ${IRODS_CORE_SOURCE_FILES}
             ${IRODS_HASHER_SOURCE_FILES}
-            ${IRODS_RBUDP_SOURCE_FILES}
-            ${IRODS_SERVER_SOURCE_FILES})
+            ${IRODS_RBUDP_SOURCE_FILES})
 
 set_target_properties(${IRODS_LIBRARY_NAME}
                       PROPERTIES
@@ -212,9 +261,9 @@ target_include_directories(${IRODS_LIBRARY_NAME}
                            ${CMAKE_SOURCE_DIR}/include/core
                            ${CMAKE_SOURCE_DIR}/include/hasher
                            ${CMAKE_SOURCE_DIR}/include/rbudp
-                           ${CMAKE_SOURCE_DIR}/server/icat/include
                            ${CMAKE_SOURCE_DIR}/server/core/include
                            ${CMAKE_SOURCE_DIR}/server/drivers/include
+                           ${CMAKE_SOURCE_DIR}/server/icat/include
                            ${CMAKE_SOURCE_DIR}/server/re/include
                            ${OPENSSL_INCLUDE_DIR}
                            /opt/irods-externals/boost1.67.0-0/include
@@ -223,12 +272,13 @@ target_include_directories(${IRODS_LIBRARY_NAME}
 
 target_link_libraries(${IRODS_LIBRARY_NAME}
                       PRIVATE
+                      /opt/irods-externals/boost1.67.0-0/lib/libboost_chrono.so
                       /opt/irods-externals/boost1.67.0-0/lib/libboost_filesystem.so
+                      /opt/irods-externals/boost1.67.0-0/lib/libboost_program_options.so
+                      /opt/irods-externals/boost1.67.0-0/lib/libboost_regex.so
                       /opt/irods-externals/boost1.67.0-0/lib/libboost_system.so
                       /opt/irods-externals/boost1.67.0-0/lib/libboost_thread.so
-                      /opt/irods-externals/boost1.67.0-0/lib/libboost_chrono.so
-                      /opt/irods-externals/boost1.67.0-0/lib/libboost_regex.so
-                      ${OPENSSL_SSL_LIBRARY}
                       ${OPENSSL_CRYTO_LIBRARY}
+                      ${OPENSSL_SSL_LIBRARY}
                       ${CMAKE_THREAD_LIBS_INIT})
 

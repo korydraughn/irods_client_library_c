@@ -31,36 +31,6 @@
 using namespace boost::filesystem;
 
 
-
-int
-sendTranHeader( int sock, int oprType, int flags, rodsLong_t offset,
-                rodsLong_t length ) {
-    transferHeader_t myHeader;
-    int retVal;
-
-    myHeader.oprType = htonl( oprType );
-    myHeader.flags = htonl( flags );
-    myHtonll( offset, ( rodsLong_t * ) &myHeader.offset );
-    myHtonll( length, ( rodsLong_t * ) &myHeader.length );
-
-    retVal = myWrite( sock, ( void * ) &myHeader, sizeof( myHeader ), NULL );
-
-    if ( retVal != sizeof( myHeader ) ) {
-        rodsLog( LOG_ERROR,
-                 "sendTranHeader: toWrite = %d, written = %d",
-                 sizeof( myHeader ), retVal );
-        if ( retVal < 0 ) {
-            return retVal;
-        }
-        else {
-            return SYS_COPY_LEN_ERR;
-        }
-    }
-    else {
-        return 0;
-    }
-}
-
 int
 rcvTranHeader( int sock, transferHeader_t *myHeader ) {
     int retVal;

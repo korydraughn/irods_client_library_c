@@ -7,7 +7,7 @@
 #include "irods_resource_plugin_impostor.hpp"
 #include "irods_load_plugin.hpp"
 #include "irods_lexical_cast.hpp"
-#include "rsGenQuery.hpp"
+//#include "rsGenQuery.hpp"
 
 // =-=-=-=-=-=-=-
 // irods includes
@@ -257,7 +257,8 @@ namespace irods {
         while ( continueInx > 0 ) {
             // =-=-=-=-=-=-=-
             // perform the general query
-            int status = rsGenQuery( _comm, &genQueryInp, &genQueryOut );
+            //int status = rsGenQuery( _comm, &genQueryInp, &genQueryOut );
+            int status = -1;
 
             // =-=-=-=-=-=-=-
             // perform the general query

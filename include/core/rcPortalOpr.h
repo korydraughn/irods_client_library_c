@@ -54,9 +54,6 @@ int
 rcvTranHeader( int sock, transferHeader_t *myHeader );
 
 int
-sendTranHeader( int sock, int oprType, int flags, rodsLong_t offset,
-                rodsLong_t length );
-int
 fillBBufWithFile( rcComm_t *conn, bytesBuf_t *myBBuf, char *locFilePath,
                   rodsLong_t dataSize );
 int

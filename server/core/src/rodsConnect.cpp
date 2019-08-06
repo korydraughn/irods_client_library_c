@@ -8,7 +8,7 @@
 #include "rodsConnect.h"
 #include "rsGlobalExtern.hpp"
 #include "rcGlobalExtern.h"
-#include "miscServerFunct.hpp"
+//#include "miscServerFunct.hpp"
 #include "getRemoteZoneResc.h"
 #include "irods_resource_backport.hpp"
 #include "rsLog.hpp"
@@ -30,66 +30,66 @@
  * If the rcat host is remote, it will automatically connect to the rcat host.
  */
 
-int getAndConnRcatHost(
-    rsComm_t *rsComm,
-    int rcatType,
-    const char *rcatZoneHint,
-    rodsServerHost_t **rodsServerHost ) {
+//int getAndConnRcatHost(
+//    rsComm_t *rsComm,
+//    int rcatType,
+//    const char *rcatZoneHint,
+//    rodsServerHost_t **rodsServerHost ) {
+//
+//    int status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        rodsLog( LOG_NOTICE,
+//                 "getAndConnRcatHost:getRcatHost() failed. erro=%d", status );
+//        return status;
+//    }
+//
+//    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
+//        return LOCAL_HOST;
+//    }
+//    status = svrToSvrConnect( rsComm, *rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        rodsLog( LOG_NOTICE,
+//                 "getAndConnRcatHost: svrToSvrConnect to %s failed",
+//                 ( *rodsServerHost )->hostName->name );
+//        if ( ( *rodsServerHost )->rcatEnabled == REMOTE_ICAT ) {
+//            status = convZoneSockError( status );
+//        }
+//    }
+//    if ( status >= 0 ) {
+//        return REMOTE_HOST;
+//    }
+//    else {
+//        return status;
+//    }
+//}
 
-    int status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
-
-    if ( status < 0 ) {
-        rodsLog( LOG_NOTICE,
-                 "getAndConnRcatHost:getRcatHost() failed. erro=%d", status );
-        return status;
-    }
-
-    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
-        return LOCAL_HOST;
-    }
-    status = svrToSvrConnect( rsComm, *rodsServerHost );
-
-    if ( status < 0 ) {
-        rodsLog( LOG_NOTICE,
-                 "getAndConnRcatHost: svrToSvrConnect to %s failed",
-                 ( *rodsServerHost )->hostName->name );
-        if ( ( *rodsServerHost )->rcatEnabled == REMOTE_ICAT ) {
-            status = convZoneSockError( status );
-        }
-    }
-    if ( status >= 0 ) {
-        return REMOTE_HOST;
-    }
-    else {
-        return status;
-    }
-}
-
-int
-getAndConnRcatHostNoLogin( rsComm_t *rsComm, int rcatType, char *rcatZoneHint,
-                           rodsServerHost_t **rodsServerHost ) {
-    int status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
-
-    if ( status < 0 ) {
-        return status;
-    }
-
-    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
-        return LOCAL_HOST;
-    }
-
-    status = svrToSvrConnectNoLogin( rsComm, *rodsServerHost );
-
-    if ( status < 0 ) {
-        rodsLog( LOG_NOTICE,
-                 "getAndConnRcatHost: svrToSvrConnectNoLogin to %s failed",
-                 ( *rodsServerHost )->hostName->name );
-        if ( ( *rodsServerHost )->rcatEnabled == REMOTE_ICAT ) {
-            status = convZoneSockError( status );
-        }
-    }
-    return status;
-}
+//int
+//getAndConnRcatHostNoLogin( rsComm_t *rsComm, int rcatType, char *rcatZoneHint,
+//                           rodsServerHost_t **rodsServerHost ) {
+//    int status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        return status;
+//    }
+//
+//    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
+//        return LOCAL_HOST;
+//    }
+//
+//    status = svrToSvrConnectNoLogin( rsComm, *rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        rodsLog( LOG_NOTICE,
+//                 "getAndConnRcatHost: svrToSvrConnectNoLogin to %s failed",
+//                 ( *rodsServerHost )->hostName->name );
+//        if ( ( *rodsServerHost )->rcatEnabled == REMOTE_ICAT ) {
+//            status = convZoneSockError( status );
+//        }
+//    }
+//    return status;
+//}
 
 int
 getRcatHost( int rcatType, const char *rcatZoneHint,
@@ -245,73 +245,73 @@ queueRodsServerHost( rodsServerHost_t **rodsServerHostHead,
     return 0;
 }
 
-int queueZone(
-    const char*       zoneName,
-    int               portNum,
-    rodsServerHost_t* masterServerHost,
-    rodsServerHost_t* slaveServerHost ) {
-
-    bool zoneAlreadyInList = false;
-
-    zoneInfo_t *tmpZoneInfo, *lastZoneInfo;
-    zoneInfo_t *myZoneInfo;
-
-    myZoneInfo = ( zoneInfo_t * ) malloc( sizeof( zoneInfo_t ) );
-
-    memset( myZoneInfo, 0, sizeof( zoneInfo_t ) );
-
-    rstrcpy( myZoneInfo->zoneName, zoneName, NAME_LEN );
-    if ( masterServerHost != NULL ) {
-        myZoneInfo->masterServerHost = masterServerHost;
-        masterServerHost->zoneInfo = myZoneInfo;
-    }
-    if ( slaveServerHost != NULL ) {
-        myZoneInfo->slaveServerHost = slaveServerHost;
-        slaveServerHost->zoneInfo = myZoneInfo;
-    }
-
-    if ( portNum <= 0 ) {
-        if ( ZoneInfoHead != NULL ) {
-            myZoneInfo->portNum = ZoneInfoHead->portNum;
-        }
-        else {
-            rodsLog( LOG_ERROR,
-                     "queueZone:  Bad input portNum %d for %s", portNum, zoneName );
-            free( myZoneInfo );
-            return SYS_INVALID_SERVER_HOST;
-        }
-    }
-    else {
-        myZoneInfo->portNum = portNum;
-    }
-
-    /* queue it */
-
-    lastZoneInfo = tmpZoneInfo = ZoneInfoHead;
-    while ( tmpZoneInfo != NULL ) {
-        if (strcmp(tmpZoneInfo->zoneName, myZoneInfo->zoneName) == 0 ) {
-            zoneAlreadyInList = true;
-        }
-        lastZoneInfo = tmpZoneInfo;
-        tmpZoneInfo = tmpZoneInfo->next;
-    }
-
-    if ( lastZoneInfo == NULL ) {
-        ZoneInfoHead = myZoneInfo;
-    } else if (!zoneAlreadyInList) {
-        lastZoneInfo->next = myZoneInfo;
-    }
-    myZoneInfo->next = NULL;
-
-    if ( masterServerHost == NULL ) {
-        rodsLog( LOG_DEBUG,
-                 "queueZone:  masterServerHost for %s is NULL", zoneName );
-        return SYS_INVALID_SERVER_HOST;
-    }
-    else {
-        return 0;
-    }
-}
+//int queueZone(
+//    const char*       zoneName,
+//    int               portNum,
+//    rodsServerHost_t* masterServerHost,
+//    rodsServerHost_t* slaveServerHost ) {
+//
+//    bool zoneAlreadyInList = false;
+//
+//    zoneInfo_t *tmpZoneInfo, *lastZoneInfo;
+//    zoneInfo_t *myZoneInfo;
+//
+//    myZoneInfo = ( zoneInfo_t * ) malloc( sizeof( zoneInfo_t ) );
+//
+//    memset( myZoneInfo, 0, sizeof( zoneInfo_t ) );
+//
+//    rstrcpy( myZoneInfo->zoneName, zoneName, NAME_LEN );
+//    if ( masterServerHost != NULL ) {
+//        myZoneInfo->masterServerHost = masterServerHost;
+//        masterServerHost->zoneInfo = myZoneInfo;
+//    }
+//    if ( slaveServerHost != NULL ) {
+//        myZoneInfo->slaveServerHost = slaveServerHost;
+//        slaveServerHost->zoneInfo = myZoneInfo;
+//    }
+//
+//    if ( portNum <= 0 ) {
+//        if ( ZoneInfoHead != NULL ) {
+//            myZoneInfo->portNum = ZoneInfoHead->portNum;
+//        }
+//        else {
+//            rodsLog( LOG_ERROR,
+//                     "queueZone:  Bad input portNum %d for %s", portNum, zoneName );
+//            free( myZoneInfo );
+//            return SYS_INVALID_SERVER_HOST;
+//        }
+//    }
+//    else {
+//        myZoneInfo->portNum = portNum;
+//    }
+//
+//    /* queue it */
+//
+//    lastZoneInfo = tmpZoneInfo = ZoneInfoHead;
+//    while ( tmpZoneInfo != NULL ) {
+//        if (strcmp(tmpZoneInfo->zoneName, myZoneInfo->zoneName) == 0 ) {
+//            zoneAlreadyInList = true;
+//        }
+//        lastZoneInfo = tmpZoneInfo;
+//        tmpZoneInfo = tmpZoneInfo->next;
+//    }
+//
+//    if ( lastZoneInfo == NULL ) {
+//        ZoneInfoHead = myZoneInfo;
+//    } else if (!zoneAlreadyInList) {
+//        lastZoneInfo->next = myZoneInfo;
+//    }
+//    myZoneInfo->next = NULL;
+//
+//    if ( masterServerHost == NULL ) {
+//        rodsLog( LOG_DEBUG,
+//                 "queueZone:  masterServerHost for %s is NULL", zoneName );
+//        return SYS_INVALID_SERVER_HOST;
+//    }
+//    else {
+//        return 0;
+//    }
+//}
 
 int
 matchHostConfig( rodsServerHost_t *myRodsServerHost ) {
@@ -446,132 +446,132 @@ resolveHost( rodsHostAddr_t *addr, rodsServerHost_t **rodsServerHost ) {
     return tmpRodsServerHost->localFlag;
 }
 
-int
-resoAndConnHostByDataObjInfo( rsComm_t *rsComm, dataObjInfo_t *dataObjInfo,
-                              rodsServerHost_t **rodsServerHost ) {
-    int status;
-    rodsHostAddr_t addr;
-    int remoteFlag;
-    if ( dataObjInfo == NULL ) {
-        rodsLog( LOG_NOTICE,
-                 "resoAndConnHostByDataObjInfo: NULL dataObjInfo" );
-        return SYS_INTERNAL_NULL_INPUT_ERR;
-    }
+//int
+//resoAndConnHostByDataObjInfo( rsComm_t *rsComm, dataObjInfo_t *dataObjInfo,
+//                              rodsServerHost_t **rodsServerHost ) {
+//    int status;
+//    rodsHostAddr_t addr;
+//    int remoteFlag;
+//    if ( dataObjInfo == NULL ) {
+//        rodsLog( LOG_NOTICE,
+//                 "resoAndConnHostByDataObjInfo: NULL dataObjInfo" );
+//        return SYS_INTERNAL_NULL_INPUT_ERR;
+//    }
+//
+//    // =-=-=-=-=-=-=-
+//    // extract the host location from the resource hierarchy
+//    std::string location;
+//    irods::error ret = irods::get_loc_for_hier_string( dataObjInfo->rescHier, location );
+//    if ( !ret.ok() ) {
+//        irods::log( PASSMSG( "resoAndConnHostByDataObjInfo - failed in get_loc_for_hier_string", ret ) );
+//        return ret.code();
+//    }
+//
+//
+//    memset( &addr, 0, sizeof( addr ) );
+//    rstrcpy( addr.hostAddr, location.c_str(), NAME_LEN );
+//
+//    remoteFlag = resolveHost( &addr, rodsServerHost );
+//
+//    if ( remoteFlag == REMOTE_HOST ) {
+//        status = svrToSvrConnect( rsComm, *rodsServerHost );
+//        if ( status < 0 ) {
+//            rodsLog( LOG_ERROR,
+//                     "resAndConnHostByDataObjInfo: svrToSvrConnect to %s failed",
+//                     ( *rodsServerHost )->hostName->name );
+//        }
+//    }
+//    return remoteFlag;
+//}
 
-    // =-=-=-=-=-=-=-
-    // extract the host location from the resource hierarchy
-    std::string location;
-    irods::error ret = irods::get_loc_for_hier_string( dataObjInfo->rescHier, location );
-    if ( !ret.ok() ) {
-        irods::log( PASSMSG( "resoAndConnHostByDataObjInfo - failed in get_loc_for_hier_string", ret ) );
-        return ret.code();
-    }
+//int
+//printServerHost( rodsServerHost_t *myServerHost ) {
+//    using log = irods::experimental::log;
+//
+//    std::vector<log::key_value> server_info;
+//    hostName_t *tmpHostName;
+//    std::string hostname_label;
+//
+//    if ( myServerHost->localFlag == LOCAL_HOST ) {
+//        hostname_label = "local_hostname";
+//    }
+//    else {
+//        hostname_label = "remote_hostname";
+//    }
+//
+//    tmpHostName = myServerHost->hostName;
+//
+//    std::vector<std::string> hostnames;
+//
+//    while ( tmpHostName != NULL ) {
+//        hostnames.emplace_back(tmpHostName->name);
+//        tmpHostName = tmpHostName->next;
+//    }
+//
+//    std::stringstream ss;
+//    std::copy(std::cbegin(hostnames),
+//              std::cend(hostnames),
+//              std::experimental::make_ostream_joiner(ss, ", "));
+//    server_info.push_back({hostname_label, ss.str()});
+//    server_info.push_back({"port", std::to_string(static_cast<zoneInfo_t*>(myServerHost->zoneInfo)->portNum)});
+//
+//    log::server::info(server_info);
+//
+//    return 0;
+//}
 
-
-    memset( &addr, 0, sizeof( addr ) );
-    rstrcpy( addr.hostAddr, location.c_str(), NAME_LEN );
-
-    remoteFlag = resolveHost( &addr, rodsServerHost );
-
-    if ( remoteFlag == REMOTE_HOST ) {
-        status = svrToSvrConnect( rsComm, *rodsServerHost );
-        if ( status < 0 ) {
-            rodsLog( LOG_ERROR,
-                     "resAndConnHostByDataObjInfo: svrToSvrConnect to %s failed",
-                     ( *rodsServerHost )->hostName->name );
-        }
-    }
-    return remoteFlag;
-}
-
-int
-printServerHost( rodsServerHost_t *myServerHost ) {
-    using log = irods::experimental::log;
-
-    std::vector<log::key_value> server_info;
-    hostName_t *tmpHostName;
-    std::string hostname_label;
-
-    if ( myServerHost->localFlag == LOCAL_HOST ) {
-        hostname_label = "local_hostname";
-    }
-    else {
-        hostname_label = "remote_hostname";
-    }
-
-    tmpHostName = myServerHost->hostName;
-
-    std::vector<std::string> hostnames;
-
-    while ( tmpHostName != NULL ) {
-        hostnames.emplace_back(tmpHostName->name);
-        tmpHostName = tmpHostName->next;
-    }
-
-    std::stringstream ss;
-    std::copy(std::cbegin(hostnames),
-              std::cend(hostnames),
-              std::experimental::make_ostream_joiner(ss, ", "));
-    server_info.push_back({hostname_label, ss.str()});
-    server_info.push_back({"port", std::to_string(static_cast<zoneInfo_t*>(myServerHost->zoneInfo)->portNum)});
-
-    log::server::info(server_info);
-
-    return 0;
-}
-
-int
-printZoneInfo() {
-    zoneInfo_t *tmpZoneInfo;
-    rodsServerHost_t *tmpRodsServerHost;
-
-    tmpZoneInfo = ZoneInfoHead;
-
-    using log = irods::experimental::log;
-
-    std::vector<log::key_value> zone_info;
-
-    while ( tmpZoneInfo != NULL ) {
-        /* print the master */
-        tmpRodsServerHost = ( rodsServerHost_t * ) tmpZoneInfo->masterServerHost;
-    
-        zone_info.push_back({"zone_info.name", tmpZoneInfo->zoneName});
-
-        if ( tmpRodsServerHost->rcatEnabled == LOCAL_ICAT ) {
-            zone_info.push_back({"zone_info.type", "LOCAL_ICAT"});
-        }
-        else {
-            zone_info.push_back({"zone_info.type", "REMOTE_ICAT"});
-        }
-
-        zone_info.push_back({"zone_info.host", tmpRodsServerHost->hostName->name});
-        zone_info.push_back({"zone_info.port", std::to_string(tmpZoneInfo->portNum)});
-
-        /* print the slave */
-        tmpRodsServerHost = ( rodsServerHost_t * ) tmpZoneInfo->slaveServerHost;
-        if ( tmpRodsServerHost != NULL ) {
-            zone_info.push_back({"zone_info.slave_zone_name", tmpZoneInfo->zoneName});
-            zone_info.push_back({"zone_info.slave_type", "LOCAL_SLAVE_ICAT"});
-            zone_info.push_back({"zone_info.slave_host", tmpRodsServerHost->hostName->name});
-            zone_info.push_back({"zone_info.slave_port", std::to_string(tmpZoneInfo->portNum)});
-        }
-
-        log::server::info(zone_info);
-        zone_info.clear();
-
-        tmpZoneInfo = tmpZoneInfo->next;
-    }
-
-    /* print the reHost */
-    if ( getReHost( &tmpRodsServerHost ) >= 0 ) {
-        log::server::info({{"re_host", tmpRodsServerHost->hostName->name}});
-    }
-    else {
-        log::server::info({{"re_host", "error"}});
-    }
-
-    return 0;
-}
+//int
+//printZoneInfo() {
+//    zoneInfo_t *tmpZoneInfo;
+//    rodsServerHost_t *tmpRodsServerHost;
+//
+//    tmpZoneInfo = ZoneInfoHead;
+//
+//    using log = irods::experimental::log;
+//
+//    std::vector<log::key_value> zone_info;
+//
+//    while ( tmpZoneInfo != NULL ) {
+//        /* print the master */
+//        tmpRodsServerHost = ( rodsServerHost_t * ) tmpZoneInfo->masterServerHost;
+//
+//        zone_info.push_back({"zone_info.name", tmpZoneInfo->zoneName});
+//
+//        if ( tmpRodsServerHost->rcatEnabled == LOCAL_ICAT ) {
+//            zone_info.push_back({"zone_info.type", "LOCAL_ICAT"});
+//        }
+//        else {
+//            zone_info.push_back({"zone_info.type", "REMOTE_ICAT"});
+//        }
+//
+//        zone_info.push_back({"zone_info.host", tmpRodsServerHost->hostName->name});
+//        zone_info.push_back({"zone_info.port", std::to_string(tmpZoneInfo->portNum)});
+//
+//        /* print the slave */
+//        tmpRodsServerHost = ( rodsServerHost_t * ) tmpZoneInfo->slaveServerHost;
+//        if ( tmpRodsServerHost != NULL ) {
+//            zone_info.push_back({"zone_info.slave_zone_name", tmpZoneInfo->zoneName});
+//            zone_info.push_back({"zone_info.slave_type", "LOCAL_SLAVE_ICAT"});
+//            zone_info.push_back({"zone_info.slave_host", tmpRodsServerHost->hostName->name});
+//            zone_info.push_back({"zone_info.slave_port", std::to_string(tmpZoneInfo->portNum)});
+//        }
+//
+//        log::server::info(zone_info);
+//        zone_info.clear();
+//
+//        tmpZoneInfo = tmpZoneInfo->next;
+//    }
+//
+//    /* print the reHost */
+//    if ( getReHost( &tmpRodsServerHost ) >= 0 ) {
+//        log::server::info({{"re_host", tmpRodsServerHost->hostName->name}});
+//    }
+//    else {
+//        log::server::info({{"re_host", "error"}});
+//    }
+//
+//    return 0;
+//}
 
 int
 convZoneSockError( int inStatus ) {
@@ -655,99 +655,99 @@ getLocalZoneInfo( zoneInfo_t **outZoneInfo ) {
     return SYS_INVALID_ZONE_NAME;
 }
 
-char*
-getLocalZoneName() {
-    zoneInfo_t *tmpZoneInfo;
-
-    if ( getLocalZoneInfo( &tmpZoneInfo ) >= 0 ) {
-        return tmpZoneInfo->zoneName;
-    }
-    else {
-        return NULL;
-    }
-}
+//char*
+//getLocalZoneName() {
+//    zoneInfo_t *tmpZoneInfo;
+//
+//    if ( getLocalZoneInfo( &tmpZoneInfo ) >= 0 ) {
+//        return tmpZoneInfo->zoneName;
+//    }
+//    else {
+//        return NULL;
+//    }
+//}
 
 /* Check if there is a connected ICAT host, and if there is, disconnect */
-int
-getAndDisconnRcatHost( int rcatType, char *rcatZoneHint,
-                       rodsServerHost_t **rodsServerHost ) {
-    int status;
+//int
+//getAndDisconnRcatHost( int rcatType, char *rcatZoneHint,
+//                       rodsServerHost_t **rodsServerHost ) {
+//    int status;
+//
+//    status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        return status;
+//    }
+//
+//    if ( ( *rodsServerHost )->conn != NULL ) { /* a connection exists */
+//        status = rcDisconnect( ( *rodsServerHost )->conn );
+//        return status;
+//    }
+//    return 0;
+//}
 
-    status = getRcatHost( rcatType, rcatZoneHint, rodsServerHost );
-
-    if ( status < 0 ) {
-        return status;
-    }
-
-    if ( ( *rodsServerHost )->conn != NULL ) { /* a connection exists */
-        status = rcDisconnect( ( *rodsServerHost )->conn );
-        return status;
-    }
-    return 0;
-}
-
-int
-disconnRcatHost( int rcatType, const char *rcatZoneHint ) {
-    int status;
-    rodsServerHost_t *rodsServerHost = NULL;
-
-    status = getRcatHost( rcatType, rcatZoneHint, &rodsServerHost );
-
-    if ( status < 0 || NULL == rodsServerHost ) { // JMC cppcheck - nullptr
-        return status;
-    }
-
-    if ( ( rodsServerHost )->localFlag == LOCAL_HOST ) {
-        return LOCAL_HOST;
-    }
-
-    if ( rodsServerHost->conn != NULL ) { /* a connection exists */
-        status = rcDisconnect( rodsServerHost->conn );
-        rodsServerHost->conn = NULL;
-    }
-    if ( status >= 0 ) {
-        return REMOTE_HOST;
-    }
-    else {
-        return status;
-    }
-}
+//int
+//disconnRcatHost( int rcatType, const char *rcatZoneHint ) {
+//    int status;
+//    rodsServerHost_t *rodsServerHost = NULL;
+//
+//    status = getRcatHost( rcatType, rcatZoneHint, &rodsServerHost );
+//
+//    if ( status < 0 || NULL == rodsServerHost ) { // JMC cppcheck - nullptr
+//        return status;
+//    }
+//
+//    if ( ( rodsServerHost )->localFlag == LOCAL_HOST ) {
+//        return LOCAL_HOST;
+//    }
+//
+//    if ( rodsServerHost->conn != NULL ) { /* a connection exists */
+//        status = rcDisconnect( rodsServerHost->conn );
+//        rodsServerHost->conn = NULL;
+//    }
+//    if ( status >= 0 ) {
+//        return REMOTE_HOST;
+//    }
+//    else {
+//        return status;
+//    }
+//}
 
 /* resetRcatHost is similar to disconnRcatHost except it does not disconnect */
 
-int
-resetRcatHost( int rcatType, const char *rcatZoneHint ) {
-    rodsServerHost_t *rodsServerHost = NULL;
-    int status = getRcatHost( rcatType, rcatZoneHint, &rodsServerHost );
-
-    if ( status < 0 || NULL == rodsServerHost ) { // JMC cppcheck - nullptr
-        return status;
-    }
-
-    if ( rodsServerHost->localFlag == LOCAL_HOST ) {
-        return LOCAL_HOST;
-    }
-
-    rodsServerHost->conn = NULL;
-    return REMOTE_HOST;
-}
-
-int
-disconnectAllSvrToSvrConn() {
-    rodsServerHost_t *tmpRodsServerHost;
-
-    /* check if host exist */
-
-    tmpRodsServerHost = ServerHostHead;
-    while ( tmpRodsServerHost != NULL ) {
-        if ( tmpRodsServerHost->conn != NULL ) {
-            rcDisconnect( tmpRodsServerHost->conn );
-            tmpRodsServerHost->conn = NULL;
-        }
-        tmpRodsServerHost = tmpRodsServerHost->next;
-    }
-    return 0;
-}
+//int
+//resetRcatHost( int rcatType, const char *rcatZoneHint ) {
+//    rodsServerHost_t *rodsServerHost = NULL;
+//    int status = getRcatHost( rcatType, rcatZoneHint, &rodsServerHost );
+//
+//    if ( status < 0 || NULL == rodsServerHost ) { // JMC cppcheck - nullptr
+//        return status;
+//    }
+//
+//    if ( rodsServerHost->localFlag == LOCAL_HOST ) {
+//        return LOCAL_HOST;
+//    }
+//
+//    rodsServerHost->conn = NULL;
+//    return REMOTE_HOST;
+//}
+//
+//int
+//disconnectAllSvrToSvrConn() {
+//    rodsServerHost_t *tmpRodsServerHost;
+//
+//    /* check if host exist */
+//
+//    tmpRodsServerHost = ServerHostHead;
+//    while ( tmpRodsServerHost != NULL ) {
+//        if ( tmpRodsServerHost->conn != NULL ) {
+//            rcDisconnect( tmpRodsServerHost->conn );
+//            tmpRodsServerHost->conn = NULL;
+//        }
+//        tmpRodsServerHost = tmpRodsServerHost->next;
+//    }
+//    return 0;
+//}
 
 /* getAndConnRemoteZone - get the remote zone host (result given in
  * rodsServerHost) based on the dataObjInp->objPath as zoneHint.
@@ -784,101 +784,101 @@ getAndConnRemoteZone( rsComm_t *rsComm, dataObjInp_t *dataObjInp,
     }
 }
 
-int
-getAndConnRemoteZoneForCopy( rsComm_t *rsComm, dataObjCopyInp_t *dataObjCopyInp,
-                             rodsServerHost_t **rodsServerHost ) {
-    int status;
-    dataObjInp_t *srcDataObjInp, *destDataObjInp;
-    rodsServerHost_t *srcIcatServerHost = NULL;
-    rodsServerHost_t *destIcatServerHost = NULL;
+//int
+//getAndConnRemoteZoneForCopy( rsComm_t *rsComm, dataObjCopyInp_t *dataObjCopyInp,
+//                             rodsServerHost_t **rodsServerHost ) {
+//    int status;
+//    dataObjInp_t *srcDataObjInp, *destDataObjInp;
+//    rodsServerHost_t *srcIcatServerHost = NULL;
+//    rodsServerHost_t *destIcatServerHost = NULL;
+//
+//    srcDataObjInp = &dataObjCopyInp->srcDataObjInp;
+//    destDataObjInp = &dataObjCopyInp->destDataObjInp;
+//
+//    status = getRcatHost( MASTER_RCAT, srcDataObjInp->objPath,
+//                          &srcIcatServerHost );
+//
+//    if ( status < 0 || NULL == srcIcatServerHost ) { // JMC cppcheck - nullptr
+//        rodsLog( LOG_ERROR,
+//                 "getAndConnRemoteZoneForCopy: getRcatHost error for %s",
+//                 srcDataObjInp->objPath );
+//        return status;
+//    }
+//
+//    if ( srcIcatServerHost->rcatEnabled != REMOTE_ICAT ) {
+//        /* local zone. nothing to do */
+//        return LOCAL_HOST;
+//    }
+//
+//    status = getRcatHost( MASTER_RCAT, destDataObjInp->objPath,
+//                          &destIcatServerHost );
+//
+//    if ( status < 0 || NULL == destIcatServerHost ) { // JMC cppcheck - nullptr
+//        rodsLog( LOG_ERROR,
+//                 "getAndConnRemoteZoneForCopy: getRcatHost error for %s",
+//                 destDataObjInp->objPath );
+//        return status;
+//    }
+//
+//    if ( destIcatServerHost->rcatEnabled != REMOTE_ICAT ) {
+//        /* local zone. nothing to do */
+//        return LOCAL_HOST;
+//    }
+//
+//    /* remote zone to different remote zone copy. Have to handle it
+//     * locally because of proxy admin user privilege issue */
+//    if ( srcIcatServerHost != destIcatServerHost ) {
+//        return LOCAL_HOST;
+//    }
+//
+//    /* from the same remote zone. do it in the remote zone */
+//
+//    status = getAndConnRemoteZone( rsComm, destDataObjInp, rodsServerHost,
+//                                   REMOTE_CREATE );
+//
+//    return status;
+//}
 
-    srcDataObjInp = &dataObjCopyInp->srcDataObjInp;
-    destDataObjInp = &dataObjCopyInp->destDataObjInp;
-
-    status = getRcatHost( MASTER_RCAT, srcDataObjInp->objPath,
-                          &srcIcatServerHost );
-
-    if ( status < 0 || NULL == srcIcatServerHost ) { // JMC cppcheck - nullptr
-        rodsLog( LOG_ERROR,
-                 "getAndConnRemoteZoneForCopy: getRcatHost error for %s",
-                 srcDataObjInp->objPath );
-        return status;
-    }
-
-    if ( srcIcatServerHost->rcatEnabled != REMOTE_ICAT ) {
-        /* local zone. nothing to do */
-        return LOCAL_HOST;
-    }
-
-    status = getRcatHost( MASTER_RCAT, destDataObjInp->objPath,
-                          &destIcatServerHost );
-
-    if ( status < 0 || NULL == destIcatServerHost ) { // JMC cppcheck - nullptr
-        rodsLog( LOG_ERROR,
-                 "getAndConnRemoteZoneForCopy: getRcatHost error for %s",
-                 destDataObjInp->objPath );
-        return status;
-    }
-
-    if ( destIcatServerHost->rcatEnabled != REMOTE_ICAT ) {
-        /* local zone. nothing to do */
-        return LOCAL_HOST;
-    }
-
-    /* remote zone to different remote zone copy. Have to handle it
-     * locally because of proxy admin user privilege issue */
-    if ( srcIcatServerHost != destIcatServerHost ) {
-        return LOCAL_HOST;
-    }
-
-    /* from the same remote zone. do it in the remote zone */
-
-    status = getAndConnRemoteZone( rsComm, destDataObjInp, rodsServerHost,
-                                   REMOTE_CREATE );
-
-    return status;
-}
-
-int
-isLocalZone( char *zoneHint ) {
-    int status;
-    rodsServerHost_t *icatServerHost = NULL;
-
-    status = getRcatHost( MASTER_RCAT, zoneHint, &icatServerHost );
-
-    if ( status < 0 || NULL == icatServerHost ) { // JMC cppcheck - nullptr
-        return 0;
-    }
-
-    if ( icatServerHost->rcatEnabled != REMOTE_ICAT ) {
-        /* local zone. */
-        return 1;
-    }
-    else {
-        return 0;
-    }
-}
-
-/* isSameZone - return 1 if from same zone, otherwise return 0
- */
-int
-isSameZone( char *zoneHint1, char *zoneHint2 ) {
-    char zoneName1[NAME_LEN], zoneName2[NAME_LEN];
-
-    if ( zoneHint1 == NULL || zoneHint2 == NULL ) {
-        return 0;
-    }
-
-    getZoneNameFromHint( zoneHint1, zoneName1, NAME_LEN );
-    getZoneNameFromHint( zoneHint2, zoneName2, NAME_LEN );
-
-    if ( strcmp( zoneName1, zoneName2 ) == 0 ) {
-        return 1;
-    }
-    else {
-        return 0;
-    }
-}
+//int
+//isLocalZone( char *zoneHint ) {
+//    int status;
+//    rodsServerHost_t *icatServerHost = NULL;
+//
+//    status = getRcatHost( MASTER_RCAT, zoneHint, &icatServerHost );
+//
+//    if ( status < 0 || NULL == icatServerHost ) { // JMC cppcheck - nullptr
+//        return 0;
+//    }
+//
+//    if ( icatServerHost->rcatEnabled != REMOTE_ICAT ) {
+//        /* local zone. */
+//        return 1;
+//    }
+//    else {
+//        return 0;
+//    }
+//}
+//
+///* isSameZone - return 1 if from same zone, otherwise return 0
+// */
+//int
+//isSameZone( char *zoneHint1, char *zoneHint2 ) {
+//    char zoneName1[NAME_LEN], zoneName2[NAME_LEN];
+//
+//    if ( zoneHint1 == NULL || zoneHint2 == NULL ) {
+//        return 0;
+//    }
+//
+//    getZoneNameFromHint( zoneHint1, zoneName1, NAME_LEN );
+//    getZoneNameFromHint( zoneHint2, zoneName2, NAME_LEN );
+//
+//    if ( strcmp( zoneName1, zoneName2 ) == 0 ) {
+//        return 1;
+//    }
+//    else {
+//        return 0;
+//    }
+//}
 
 int
 getRemoteZoneHost( rsComm_t *rsComm, dataObjInp_t *dataObjInp,
@@ -925,22 +925,22 @@ getRemoteZoneHost( rsComm_t *rsComm, dataObjInp_t *dataObjInp,
     return status;
 }
 
-int
-isLocalHost( const char *hostAddr ) {
-    int remoteFlag;
-    rodsServerHost_t *rodsServerHost;
-    rodsHostAddr_t addr;
-
-    bzero( &addr, sizeof( addr ) );
-    rstrcpy( addr.hostAddr, hostAddr, NAME_LEN );
-    remoteFlag = resolveHost( &addr, &rodsServerHost );
-    if ( remoteFlag == LOCAL_HOST ) {
-        return 1;
-    }
-    else {
-        return 0;
-    }
-}
+//int
+//isLocalHost( const char *hostAddr ) {
+//    int remoteFlag;
+//    rodsServerHost_t *rodsServerHost;
+//    rodsHostAddr_t addr;
+//
+//    bzero( &addr, sizeof( addr ) );
+//    rstrcpy( addr.hostAddr, hostAddr, NAME_LEN );
+//    remoteFlag = resolveHost( &addr, &rodsServerHost );
+//    if ( remoteFlag == LOCAL_HOST ) {
+//        return 1;
+//    }
+//    else {
+//        return 0;
+//    }
+//}
 
 int
 getReHost( rodsServerHost_t **rodsServerHost ) {
@@ -967,33 +967,33 @@ getReHost( rodsServerHost_t **rodsServerHost ) {
  * irodsReServer is run.
  */
 
-int
-getAndConnReHost( rsComm_t *rsComm, rodsServerHost_t **rodsServerHost ) {
-    int status;
-
-    status = getReHost( rodsServerHost );
-
-    if ( status < 0 ) {
-        rodsLog( LOG_NOTICE,
-                 "getAndConnReHost:getReHost() failed. erro=%d", status );
-        return status;
-    }
-
-    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
-        return LOCAL_HOST;
-    }
-
-    status = svrToSvrConnect( rsComm, *rodsServerHost );
-
-    if ( status < 0 ) {
-        rodsLog( LOG_NOTICE,
-                 "getAndConnReHost: svrToSvrConnect to %s failed",
-                 ( *rodsServerHost )->hostName->name );
-    }
-    if ( status >= 0 ) {
-        return REMOTE_HOST;
-    }
-    else {
-        return status;
-    }
-}
+//int
+//getAndConnReHost( rsComm_t *rsComm, rodsServerHost_t **rodsServerHost ) {
+//    int status;
+//
+//    status = getReHost( rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        rodsLog( LOG_NOTICE,
+//                 "getAndConnReHost:getReHost() failed. erro=%d", status );
+//        return status;
+//    }
+//
+//    if ( ( *rodsServerHost )->localFlag == LOCAL_HOST ) {
+//        return LOCAL_HOST;
+//    }
+//
+//    status = svrToSvrConnect( rsComm, *rodsServerHost );
+//
+//    if ( status < 0 ) {
+//        rodsLog( LOG_NOTICE,
+//                 "getAndConnReHost: svrToSvrConnect to %s failed",
+//                 ( *rodsServerHost )->hostName->name );
+//    }
+//    if ( status >= 0 ) {
+//        return REMOTE_HOST;
+//    }
+//    else {
+//        return status;
+//    }
+//}
