@@ -13,6 +13,9 @@
 #include "irodsntutil.hpp"
 #endif
 
+#include <string>
+#include <map>
+
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/convenience.hpp>
 
@@ -494,5 +497,32 @@ clearRodsPath( rodsPath_t *rodsPath ) {
     memset( rodsPath, 0, sizeof( rodsPath_t ) );
 
     return;
+}
+
+char* escape_path(const char* _path)
+{
+    static const std::map<char, std::string> special_char_mappings{
+        {'\f', "\\f"}
+    };
+
+    std::string path = _path;
+    std::string escaped_path;
+    const auto end = std::end(special_char_mappings);
+
+    for (auto&& c : path) {
+        if (const auto iter = special_char_mappings.find(c); end != iter) {
+            escaped_path += iter->second;
+        }
+        else {
+            escaped_path += c;
+        }
+    }
+
+    const auto size = escaped_path.size() + 1;
+    char* escaped_path_c_str = static_cast<char*>(std::malloc(sizeof(char) * size));
+    std::memset(escaped_path_c_str, '\0', size);
+    std::strcpy(escaped_path_c_str, escaped_path.c_str());
+
+    return escaped_path_c_str;
 }
 

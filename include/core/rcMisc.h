@@ -4,8 +4,6 @@
 /* rcMisc.h - header file for rcMisc.c
  */
 
-
-
 #ifndef RC_MISC_H__
 #define RC_MISC_H__
 
@@ -14,11 +12,88 @@
 #include "objInfo.h"
 #include "rodsPath.h"
 #include "bulkDataObjPut.h"
+#include "bulkOprInfo.h"
 #include <netinet/in.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+int
+resizeStrArray( strArray_t *strArray, int newSize );
+int
+startsWith( const char * str, const char * prefix );
+int
+convertListToMultiString( char * strInput, int input );
+char*
+trimPrefix( char * str );
+char*
+trimSpaces( char * str ); 
+int
+getLine( FILE *fp, char *buf, int bufSize );
+int
+setForceFlagForRestart( bulkOprInp_t* bulkOprInp, bulkOprInfo_t* bulkOprInfo );
+int
+localToUnixTime( char *localTime, char *unixTime );
+char*
+getAttrNameFromAttrId( int cid );
+int
+getAttrIdFromAttrName( char *cname );
+int
+separateSelFuncFromAttr( char *t, char **aggOp, char **colNm );
+int
+getSelVal( char *c );
+char*
+getCondFromString( char * t );
+int
+isInteger(const char* inStr);
+int
+goodStrExpr(char* expr);
+int
+showAttrNames();
+int
+openRestartFile( char * restartFile, rodsRestart_t * rodsRestart );
+int
+getLineInBuf( char **inbuf, char * outbuf, int bufLen );
+int
+writeRestartFile( rodsRestart_t * rodsRestart, char * lastDonePath );
+int
+procAndWriteRestartFile( rodsRestart_t * rodsRestart, char * donePath );
+int
+setStateForRestart( rodsRestart_t * rodsRestart, rodsPath_t * targPath, rodsArguments_t * rodsArgs );
+int
+chkStateForResume( rcComm_t *conn, rodsRestart_t *rodsRestart,
+                   char *targPath, rodsArguments_t *rodsArgs, objType_t objType,
+                   keyValPair_t *condInput, int deleteFlag );
+int
+getPathStMode( const char* p );
+int
+initAttriArrayOfBulkOprInp( bulkOprInp_t *bulkOprInp );
+int
+fillAttriArrayOfBulkOprInp( char *objPath, int dataMode, char *inpChksum,
+                            int offset, bulkOprInp_t *bulkOprInp );
+int
+getSpecCollTypeStr( specColl_t * specColl, char * outStr );
+unsigned int
+seedRandom();
+void
+getOffsetTimeStr( char *timeStr, const char *offSet );
+int
+fillGenQueryInpFromStrCond( char *str, genQueryInp_t *genQueryInp );
+int
+printGenQueryOut( FILE *fd, char *format, char *hint, genQueryOut_t *genQueryOut );
+int
+parseUserName( const char *fullUserNameIn, char *userName, char *userZone );
+void
+printReleaseInfo( char *cmdName );
+int
+printErrorStack( rError_t *rError );
+void
+getNowStr( char *timeStr );
+int
+getLocalTimeFromRodsTime( const char *timeStrIn, char *timeStrOut );
+int
+checkDateFormat( char *s );
 void
 clearModAVUMetadataInp( void* );
 void
@@ -113,8 +188,6 @@ parseMultiStr( char *strInput, strArray_t *strArray );
 int
 mySetenvStr( const char * envname, const char * envval );
 
-// DEPRECATED in a future release
-
 int
 hasSymlinkInDir( const char *mydir );
 
@@ -131,4 +204,5 @@ int load_in_addr_from_hostname(const char* _hostname, struct in_addr* _out);
 #ifdef __cplusplus
 }
 #endif
+
 #endif  // RC_MISC_H__

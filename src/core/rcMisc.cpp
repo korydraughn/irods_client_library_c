@@ -4,10 +4,11 @@
 /* rcMisc.c - misc client routines
  */
 #ifndef windows_platform
-#include <sys/time.h>
+    #include <sys/time.h>
 #else
-#include "Unix2Nt.hpp"
+    #include "Unix2Nt.hpp"
 #endif
+
 #include "rcMisc.h"
 #include "apiHeaderAll.h"
 #include "modDataObjMeta.h"
@@ -15,7 +16,6 @@
 #include "rodsGenQueryNames.h"
 #include "rodsType.h"
 #include "dataObjPut.h"
-
 #include "bulkDataObjPut.h"
 
 #include <cstdlib>
@@ -23,13 +23,1275 @@
 #include <algorithm>
 #include <string>
 
-// =-=-=-=-=-=-=-
 #include "irods_virtual_path.hpp"
 #include "irods_hierarchy_parser.hpp"
 
-// =-=-=-=-=-=-=-
-// boost includes
 #include <boost/filesystem/operations.hpp>
+
+int resizeStrArray( strArray_t *strArray, int newSize ) {
+    int i, newLen;
+    char *newValue;
+
+    if ( newSize > strArray->size ||
+            ( strArray->len % PTR_ARRAY_MALLOC_LEN ) == 0 ) {
+        int oldSize = strArray->size;
+        /* have to redo it */
+        if ( strArray->size > newSize ) {
+            newSize = strArray->size;
+        }
+        else {
+            strArray->size = newSize;
+        }
+        newLen = strArray->len + PTR_ARRAY_MALLOC_LEN;
+        newValue = ( char * ) malloc( newLen * newSize );
+        memset( newValue, 0, newLen * newSize );
+        for ( i = 0; i < strArray->len; i++ ) {
+            rstrcpy( &newValue[i * newSize], &strArray->value[i * oldSize],
+                     newSize );
+        }
+        if ( strArray->value != NULL ) {
+            free( strArray->value );
+        }
+        strArray->value = newValue;
+    }
+    return 0;
+}
+
+int startsWith( const char * str, const char * prefix ) {
+    return str == strstr( str, prefix );
+}
+
+int convertListToMultiString( char * strInput, int input ) {
+    if ( strcmp( strInput, "null" ) == 0 ) {
+        return 0;
+    }
+    char *src = strdup( strInput );
+
+    char *p = strInput;
+    char *psrc = src;
+
+    /* replace % with %% */
+    while ( *psrc != '\0' ) {
+        if ( *psrc == '%' ) {
+            *( p++ ) = '%';
+            *( p++ ) = '%';
+            psrc++;
+        }
+        else {
+            *( p++ ) = *( psrc++ );
+        }
+    }
+    *p = '\0';
+
+    free( src );
+
+    /* replace , with % and remove extra spaces */
+    p = strInput;
+    psrc = strInput;
+    while ( *psrc != '\0' ) {
+        /* variable name */
+        while ( !isspace( *psrc ) && *psrc != '=' && *psrc != ',' && *psrc != '\0' ) {
+            *( p++ ) = *( psrc++ );
+        }
+
+        /* skip spaces */
+        while ( isspace( *psrc ) ) {
+            psrc++;
+        }
+        if ( input ) {
+            if ( *psrc == '=' ) {
+                /* assignment */
+                *( p++ ) = *( psrc++ );
+
+                int inString = 0;
+                char delim = '\0';
+                while ( *psrc != '\0' ) {
+                    if ( inString ) {
+                        if ( *psrc == delim ) {
+                            inString = 0;
+                        }
+                        else if ( *psrc == '\\' ) {
+                            *( p++ ) = *( psrc++ );
+                            if ( *psrc == '\0' ) {
+                                return -1;
+                            }
+                        }
+                        *( p++ ) = *( psrc++ );
+                    }
+                    else {
+                        if ( *psrc == ',' ) {
+                            *( p++ ) = '%';
+                            psrc++;
+                            break;
+                        }
+                        else {
+                            if ( *psrc == '\'' || *psrc == '\"' ) {
+                                inString = 1;
+                                delim = *psrc;
+                            }
+                            *( p++ ) = *( psrc++ );
+                        }
+                    }
+                }
+            }
+            else {
+                return -1;
+            }
+        }
+        else {
+            if ( *psrc == '\0' ) {
+                break;
+            }
+            else if ( *psrc == ',' ) {
+                *( p++ ) = '%';
+                psrc++;
+            }
+            else {
+                return -1;
+            }
+        }
+        /* skip spaces */
+        while ( isspace( *psrc ) ) {
+            psrc++;
+        }
+    }
+    *p = '\0';
+    return 0;
+}
+
+char *trimPrefix( char * str ) {
+    int i = 0;
+    while ( str[i] != ' ' ) {
+        i++;
+    }
+    while ( str[i] == ' ' ) {
+        i++;
+    }
+    memmove( str, str + i, strlen( str ) + 1 - i );
+    return str;
+}
+
+char *trimSpaces( char * str ) {
+    char *p = str;
+    char *psrc = str;
+
+    while ( *psrc != '\0' && isspace( *psrc ) ) {
+        psrc++;
+    }
+
+    while ( *psrc != '\0' ) {
+        *( p++ ) = *( psrc++ );
+    }
+
+    p--;
+    while ( isspace( *p ) && p - str >= 0 ) {
+        p--;
+    }
+
+    p++;
+    *p = '\0';
+
+    return str;
+
+}
+
+/* getLine - Read the next line. Add a NULL char at the end.
+ * return the length of the line including the terminating NULL.
+ */
+
+int
+getLine( FILE *fp, char *buf, int bufSize ) {
+    int c;
+    int len = 0;
+    char *cptr = buf;
+
+    while ( ( c = getc( fp ) ) != EOF ) {
+        if ( c == '\n' ) {
+            break;
+        }
+        *cptr ++ = c;
+        len ++;
+
+        /* overflow buf ? */
+        if ( len >= bufSize - 1 ) {
+            rodsLog( LOG_ERROR, "getLine: buffer overflow bufSize %d",
+                     bufSize );
+            break;
+        }
+
+    }
+    if ( c == EOF && len == 0 ) {
+        return EOF;
+    }
+    else {
+        *cptr ++ = '\0';
+        len ++;
+        return len;
+    }
+}
+
+int
+setForceFlagForRestart( bulkOprInp_t* bulkOprInp, bulkOprInfo_t* bulkOprInfo ) {
+    if ( bulkOprInp == NULL || bulkOprInfo == NULL ) {
+        return USER__NULL_INPUT_ERR;
+    }
+
+    if ( getValByKey( &bulkOprInp->condInput, FORCE_FLAG_KW ) != NULL ) {
+        /* already has FORCE_FLAG_KW */
+        return 0;
+    }
+
+    addKeyVal( &bulkOprInp->condInput, FORCE_FLAG_KW, "" );
+    /* remember to remove it */
+    bulkOprInfo->forceFlagAdded = 1;
+
+    return 0;
+}
+
+/* checkDateFormat - convert the string given in s and output the time
+ * in sec of unix time in the same string s
+ * The input can be incremental time given in :
+ *     nnnn - an integer. assumed to be in sec
+ *     nnnns - an integer followed by 's' ==> in sec
+ *     nnnnm - an integer followed by 'm' ==> in min
+ *     nnnnh - an integer followed by 'h' ==> in hours
+ *     nnnnd - an integer followed by 'd' ==> in days
+ *     nnnny - an integer followed by 'y' ==> in years
+ *     dd.hh:mm:ss - where dd, hh, mm and ss are 2 digits integers representing
+ *       days, hours minutes and seconds, repectively. Truncation from the
+ *       end is allowed. e.g. 20:40 means mm:ss
+ * The input can also be full calendar time in the form:
+ *    YYYY-MM-DD.hh:mm:ss  - Truncation from the beginning is allowed.
+ *       e.g., 2007-07-29.12 means noon of July 29, 2007.
+ *
+ */
+
+int
+checkDateFormat( char * s ) {
+    /* Note. The input *s is assumed to be TIME_LEN long */
+    int len;
+    char t[] = "0000-00-00.00:00:00";
+    char outUnixTime[TIME_LEN];
+    int status;
+    int offset = 0;
+
+    if ( isInteger( s ) ) {
+        return 0;
+    }
+
+    len = strlen( s );
+
+    if ( s[len - 1] == 's' ) {
+        /* in sec */
+        s[len - 1] = '\0';
+        offset = atoi( s );
+        snprintf( s, 19, "%d", offset );
+        return 0;
+    }
+    else if ( s[len - 1] == 'm' ) {
+        /* in min */
+        s[len - 1] = '\0';
+        offset = atoi( s ) * 60;
+        snprintf( s, 19, "%d", offset );
+        return 0;
+    }
+    else if ( s[len - 1] == 'h' ) {
+        /* in hours */
+        s[len - 1] = '\0';
+        offset = atoi( s ) * 3600;
+        snprintf( s, 19, "%d", offset );
+        return 0;
+    }
+    else if ( s[len - 1] == 'd' ) {
+        /* in days */
+        s[len - 1] = '\0';
+        offset = atoi( s ) * 3600 * 24;
+        snprintf( s, 19, "%d", offset );
+        return 0;
+    }
+    else if ( s[len - 1] == 'y' ) {
+        /* in days */
+        s[len - 1] = '\0';
+        offset = atoi( s ) * 3600 * 24 * 365;
+        snprintf( s, 19, "%d", offset );
+        return 0;
+    }
+    else if ( len < 19 ) {
+        /* not a full date. */
+        if ( isdigit( s[0] ) && isdigit( s[1] ) && isdigit( s[2] ) && isdigit( s[3] ) ) {
+            /* start with year, fill in the rest */
+            strcat( s, ( char * )&t[len] );
+        }
+        else {
+            /* must be offset */
+            int mypos;
+
+            /* sec */
+            mypos = len - 1;
+            while ( mypos >= 0 ) {
+                if ( isdigit( s[mypos] ) ) {
+                    offset += s[mypos] - 48;
+                }
+                else {
+                    return DATE_FORMAT_ERR;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 10 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( s[mypos] != ':' ) {
+                        return DATE_FORMAT_ERR;
+                    }
+
+                /* min */
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 60 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 10 * 60 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( s[mypos] != ':' ) {
+                        return DATE_FORMAT_ERR;
+                    }
+
+                /* hour */
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 3600 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 10 * 3600 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( s[mypos] != '.' ) {
+                        return DATE_FORMAT_ERR;
+                    }
+
+                /* day */
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 24 * 3600 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+
+                mypos--;
+                if ( mypos >= 0 )
+                    if ( isdigit( s[mypos] ) ) {
+                        offset += 10 * 24 * 3600 * ( s[mypos] - 48 );
+                    }
+                    else {
+                        return DATE_FORMAT_ERR;
+                    }
+                else {
+                    break;
+                }
+            }
+            snprintf( s, 19, "%d", offset );
+            return 0;
+        }
+    }
+
+    if ( isdigit( s[0] ) && isdigit( s[1] ) && isdigit( s[2] ) && isdigit( s[3] ) &&
+            isdigit( s[5] ) && isdigit( s[6] ) && isdigit( s[8] ) && isdigit( s[9] ) &&
+            isdigit( s[11] ) && isdigit( s[12] ) && isdigit( s[14] ) && isdigit( s[15] ) &&
+            isdigit( s[17] ) && isdigit( s[18] ) &&
+            s[4] == '-' && s[7] == '-' && s[10] == '.' &&
+            s[13] == ':' && s[16] == ':' ) {
+        status = localToUnixTime( s, outUnixTime );
+        if ( status >= 0 ) {
+            rstrcpy( s, outUnixTime, TIME_LEN );
+        }
+        return status;
+    }
+    else {
+        return DATE_FORMAT_ERR;
+    }
+}
+
+/*
+   Convert a Unix time value (as from getNowStr) to a local
+   time format.
+ */
+int
+getLocalTimeFromRodsTime( const char *timeStrIn, char *timeStr ) {
+    time_t myTime;
+    struct tm *mytm;
+
+    // This is 1 because they actually capture a leading space
+    if ( strlen( timeStrIn ) <= 1 ) {
+        strcpy( timeStr, "Never" );
+    }
+    else {
+        if ( sizeof( time_t ) == 4 ) {
+            myTime = atol( timeStrIn );
+        }
+        else {
+#ifdef _WIN32
+            myTime = _atoi64( timeStrIn );
+#else
+            myTime = atoll( timeStrIn );
+#endif
+        }
+
+        mytm = localtime( &myTime );
+
+        getLocalTimeStr( mytm, timeStr );
+    }
+    return 0;
+}
+
+/*
+   Return an integer string of the current time in the Unix Time
+   format (integer seconds since 1970).  This is the same
+   in all timezones (sort of CUT) and is converted to local time
+   for display.
+ */
+void
+getNowStr( char *timeStr ) {
+    time_t myTime;
+
+    myTime = time( NULL );
+    snprintf( timeStr, 15, "%011d", ( uint ) myTime );
+}
+
+int
+printErrorStack( rError_t * rError ) {
+    int i, len;
+    rErrMsg_t *errMsg;
+
+    if ( rError == NULL ) {
+        return 0;
+    }
+
+    len = rError->len;
+
+    for ( i = 0; i < len; i++ ) {
+        errMsg = rError->errMsg[i];
+        if ( errMsg->status != STDOUT_STATUS ) {
+            printf( "Level %d: ", i );
+        }
+        printf( "%s\n", errMsg->msg );
+    }
+    return 0;
+}
+
+/*
+   Print some release information.
+   Used by the iCommands when printting the help text.
+ */
+void
+printReleaseInfo( char * cmdName ) {
+    char tmp[40];
+    strncpy( tmp, RODS_REL_VERSION, 40 );   /* to skip over the 'rods' part
+                                                             of the string */
+    tmp[39] = '\0';
+    printf( "\niRODS Version %s                %s\n",
+            ( char* )&tmp[4], cmdName );
+    return;
+}
+
+//Only split the username from the zone name, based on the first occurence of '#'
+//Further parsing of the username is the responsibility of the database plugin.
+int
+parseUserName( const char * fullUserNameIn, char * userName, char * userZone ) {
+    const char * octothorpePointer = strchr( fullUserNameIn, '#' );
+    const std::string userNameString = octothorpePointer ?
+                                       std::string( fullUserNameIn, octothorpePointer - fullUserNameIn ) :
+                                       std::string( fullUserNameIn );
+    const std::string zoneNameString = octothorpePointer ?
+                                       std::string( octothorpePointer + 1 ) :
+                                       std::string();
+    if ( zoneNameString.find( '#' ) != std::string::npos || userNameString.size() >= NAME_LEN || zoneNameString.size() >= NAME_LEN ) {
+        if ( userName != NULL ) {
+            userName[0] = '\0';
+        }
+        if ( userZone != NULL ) {
+            userZone[0] = '\0';
+        }
+        return USER_INVALID_USERNAME_FORMAT;
+    }
+
+    if ( userName != NULL ) {
+        snprintf( userName, NAME_LEN, "%s", userNameString.c_str() );
+    }
+    if ( userZone != NULL ) {
+        snprintf( userZone, NAME_LEN, "%s", zoneNameString.c_str() );
+    }
+    return 0;
+}
+
+int
+printGenQueryOut( FILE * fd, char * format, char * hint, genQueryOut_t * genQueryOut ) {
+    int i = 0, n = 0, j = 0;
+    sqlResult_t *v[MAX_SQL_ATTR];
+    char * cname[MAX_SQL_ATTR];
+
+    if ( hint != NULL &&  strlen( hint ) > 0 ) {
+        //i = printHintedGenQueryOut(fd,format,hint, genQueryOut);
+        return i;
+    }
+
+    n = genQueryOut->attriCnt;
+
+    for ( i = 0; i < n; i++ ) {
+        v[i] = &genQueryOut->sqlResult[i];
+        cname[i] = getAttrNameFromAttrId( v[i]->attriInx );
+        if ( cname[i] == NULL ) {
+            return NO_COLUMN_NAME_FOUND;
+        }
+    }
+
+    try {
+        for ( i = 0; i < genQueryOut->rowCnt; i++ ) {
+            if ( format == NULL || strlen( format ) == 0 ) {
+                for ( j = 0; j < n; j++ ) {
+                    fprintf( fd, "%s = %s\n", cname[j], &v[j]->value[v[j]->len * i] );
+                }
+                fprintf( fd, "------------------------------------------------------------\n" );
+            }
+            else {
+                boost::format formatter( format );
+                for ( int j = 0; j < n; j++ ) {
+                    formatter % &v[j]->value[v[j]->len * i];
+                }
+                std::stringstream ss; ss << formatter;
+                fprintf( fd, "%s\n", ss.str().c_str() );
+            }
+        }
+    }
+    catch ( const boost::io::format_error& _e ) {
+        std::cerr << _e.what() << std::endl;
+    }
+
+    return 0;
+}
+
+int
+fillGenQueryInpFromStrCond( char * str, genQueryInp_t * genQueryInp ) {
+
+    int  n, m;
+    char *p, *t, *f, *u, *a, *c;
+    char *s;
+    s = strdup( str );
+    if ( ( t = strstr( s, "select" ) ) != NULL ||
+            ( t = strstr( s, "SELECT" ) ) != NULL ) {
+
+        if ( ( f = strstr( t, "where" ) ) != NULL ||
+                ( f = strstr( t, "WHERE" ) ) != NULL ) {
+            /* Where Condition Found*/
+            *f = '\0';
+        }
+        t = t +  7;
+        while ( ( u = strchr( t, ',' ) ) != NULL ) {
+            *u = '\0';
+            trimWS( t );
+            separateSelFuncFromAttr( t, &a, &c );
+            m = getSelVal( a );
+            n = getAttrIdFromAttrName( c );
+            if ( n < 0 ) {
+                free( s );
+                return n;
+            }
+            addInxIval( &genQueryInp->selectInp, n, m );
+            t  = u + 1;
+        }
+        trimWS( t );
+        separateSelFuncFromAttr( t, &a, &c );
+        m = getSelVal( a );
+        n = getAttrIdFromAttrName( c );
+        if ( n < 0 ) {
+            free( s );
+            return n;
+        }
+        addInxIval( &genQueryInp->selectInp, n, m );
+        if ( f == NULL ) {
+            free( s );
+            return 0;
+        }
+    }
+    else {
+        free( s );
+        return INPUT_ARG_NOT_WELL_FORMED_ERR;
+    }
+    t = f + 6;
+    while ( ( u = getCondFromString( t ) ) != NULL ) {
+        *u = '\0';
+        trimWS( t );
+        if ( ( p = strchr( t, ' ' ) ) == NULL ) {
+            free( s );
+            return INPUT_ARG_NOT_WELL_FORMED_ERR;
+        }
+        *p = '\0';
+        n = getAttrIdFromAttrName( t );
+        if ( n < 0 ) {
+            free( s );
+            return n;
+        }
+        addInxVal( &genQueryInp->sqlCondInp, n, p + 1 );
+        t = u + 5;
+    }
+    trimWS( t );
+    if ( ( p = strchr( t, ' ' ) ) == NULL ) {
+        free( s );
+        return INPUT_ARG_NOT_WELL_FORMED_ERR;
+    }
+    *p = '\0';
+    n = getAttrIdFromAttrName( t );
+    if ( n < 0 ) {
+        free( s );
+        return n;
+    }
+    addInxVal( &genQueryInp->sqlCondInp, n, p + 1 );
+    free( s );
+    return 0;
+}
+
+int
+localToUnixTime( char * localTime, char * unixTime ) {
+    time_t myTime;
+    struct tm *mytm;
+    time_t newTime;
+    char s[TIME_LEN];
+
+    myTime = time( NULL );
+    mytm = localtime( &myTime );
+
+    rstrcpy( s, localTime, TIME_LEN );
+
+    s[19] = '\0';
+    mytm->tm_sec = atoi( &s[17] );
+    s[16] = '\0';
+    mytm->tm_min = atoi( &s[14] );
+    s[13] = '\0';
+    mytm->tm_hour = atoi( &s[11] );
+    s[10] = '\0';
+    mytm->tm_mday = atoi( &s[8] );
+    s[7] = '\0';
+    mytm->tm_mon = atoi( &s[5] ) - 1;
+    s[4] = '\0';
+    mytm->tm_year = atoi( &s[0] ) - 1900;
+
+    newTime = mktime( mytm );
+    if ( sizeof( newTime ) == 64 ) {
+        snprintf( unixTime, TIME_LEN, "%lld", ( rodsLong_t ) newTime );
+    }
+    else {
+        snprintf( unixTime, TIME_LEN, "%d", ( uint ) newTime );
+    }
+    return 0;
+}
+
+char *
+getAttrNameFromAttrId( int cid ) {
+
+    int i;
+    for ( i = 0; i < NumOfColumnNames ; i++ ) {
+        if ( columnNames[i].columnId == cid ) {
+            return columnNames[i].columnName;
+        }
+    }
+    return NULL;
+}
+
+int
+separateSelFuncFromAttr( char * t, char **aggOp, char **colNm ) {
+    char *s;
+
+    if ( ( s = strchr( t, '(' ) ) == NULL ) {
+        *colNm = t;
+        *aggOp = NULL;
+        return 0;
+    }
+    *aggOp = t;
+    *s = '\0';
+    s++;
+    *colNm = s;
+    if ( ( s = strchr( *colNm, ')' ) ) == NULL ) {
+        return NO_COLUMN_NAME_FOUND;
+    }
+    *s = '\0';
+    return 0;
+}
+
+int
+getSelVal( char * c ) {
+    if ( c == NULL ) {
+        return 1;
+    }
+    if ( !strcmp( c, "sum" ) || !strcmp( c, "SUM" ) ) {
+        return SELECT_SUM;
+    }
+    if ( !strcmp( c, "min" ) || !strcmp( c, "MIN" ) ) {
+        return SELECT_MIN;
+    }
+    if ( !strcmp( c, "max" ) || !strcmp( c, "MAX" ) ) {
+        return SELECT_MAX;
+    }
+    if ( !strcmp( c, "avg" ) || !strcmp( c, "AVG" ) ) {
+        return SELECT_AVG;
+    }
+    if ( !strcmp( c, "count" ) || !strcmp( c, "COUNT" ) ) {
+        return SELECT_COUNT;
+    }
+    // =-=-=-=-=-=-=-
+    // JMC - backport 4795
+    if ( !strcmp( c, "order" ) || !strcmp( c, "ORDER" ) ) {
+        return ORDER_BY;
+    }
+    if ( !strcmp( c, "order_desc" ) || !strcmp( c, "ORDER_DESC" ) ) {
+        return ORDER_BY_DESC;
+    }
+    // =-=-=-=-=-=-=-
+
+    return 1;
+}
+
+int
+getAttrIdFromAttrName( char * cname ) {
+
+    int i;
+    for ( i = 0; i < NumOfColumnNames ; i++ ) {
+        if ( !strcmp( columnNames[i].columnName, cname ) ) {
+            return columnNames[i].columnId;
+        }
+    }
+    return NO_COLUMN_NAME_FOUND;
+}
+
+char *getCondFromString( char * t ) {
+    char *u;
+    char *u1, *u2;
+    char *s;
+
+    s = t;
+    for ( ;; ) {
+        /* Search for an 'and' string, either case, and use the one
+           that appears first. */
+        u1 = strstr( s, " and " );
+        u2 = strstr( s, " AND " );
+        u = u1;
+        if ( u1 == NULL ) {
+            u = u2;
+        }
+        if ( u1 != NULL && u2 != NULL ) {
+            if ( strlen( u2 ) > strlen( u1 ) ) {
+                u = u2;    /* both are present, use the first */
+            }
+        }
+
+        if ( u != NULL ) {
+            *u = '\0';
+            if ( goodStrExpr( t ) == 0 ) {
+                *u = ' ';
+                return u;
+            }
+            *u = ' ';
+            s = u + 1;
+        }
+        else {
+            break;
+        }
+    }
+    return NULL;
+}
+
+int
+isInteger( const char * inStr ) {
+    int i;
+    int len;
+
+    len = strlen( inStr );
+    /* see if it is all digit */
+    for ( i = 0; i < len; i++ ) {
+        if ( !isdigit( inStr[i] ) ) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int
+goodStrExpr( char * expr ) {
+    int qcnt = 0;
+    int qqcnt = 0;
+    int bcnt = 0;
+    int i = 0;
+    int inq =  0;
+    int inqq =  0;
+
+    while ( expr[i] != '\0' ) {
+        if ( inq ) {
+            if ( expr[i] == '\'' ) {
+                inq--;
+                qcnt++;
+            }
+        }
+        else if ( inqq ) {
+            if ( expr[i] == '"' ) {
+                inqq--;
+                qqcnt++;
+            }
+        }
+        else if ( expr[i] == '\'' ) {
+            inq++;
+            qcnt++;
+        }
+        else if ( expr[i] == '"' ) {
+            inqq++;
+            qqcnt++;
+        }
+        else if ( expr[i] == '(' ) {
+            bcnt++;
+        }
+        else if ( expr[i] == ')' )
+            if ( bcnt > 0 ) {
+                bcnt--;
+            }
+        i++;
+    }
+
+    if ( bcnt != 0 || qcnt % 2 != 0 || qqcnt % 2 != 0 ) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int
+showAttrNames() {
+    int i;
+    for ( i = 0; i < NumOfColumnNames ; i++ ) {
+        printf( "%s\n", columnNames[i].columnName );
+    }
+    return 0;
+}
+
+int
+openRestartFile( char * restartFile, rodsRestart_t * rodsRestart ) {
+    namespace fs = boost::filesystem;
+
+    fs::path p( restartFile );
+    char buf[MAX_NAME_LEN * 3];
+    char *inptr;
+    char tmpStr[MAX_NAME_LEN];
+    int status;
+
+    if ( !exists( p ) || file_size( p ) == 0 ) {
+#ifndef windows_platform
+        rodsRestart->fd = open( restartFile, O_RDWR | O_CREAT, 0644 );
+#else
+        rodsRestart->fd = iRODSNt_bopen( restartFile, O_RDWR | O_CREAT, 0644 );
+#endif
+        if ( rodsRestart->fd < 0 ) {
+            status = UNIX_FILE_OPEN_ERR - errno;
+            rodsLogError( LOG_ERROR, status,
+                          "openRestartFile: open error for %s", restartFile );
+            return status;
+        }
+        rodsRestart->restartState = 0;
+        printf( "New restartFile %s opened\n", restartFile );
+    }
+    else if ( !is_regular_file( p ) ) {
+        close( rodsRestart->fd );
+        rodsRestart->fd = -1;
+        status = UNIX_FILE_OPEN_ERR;
+        rodsLogError( LOG_ERROR, status,
+                      "openRestartFile: %s is not a file", restartFile );
+        return UNIX_FILE_OPEN_ERR;
+    }
+    else {
+#ifndef windows_platform
+        rodsRestart->fd = open( restartFile, O_RDWR, 0644 );
+#else
+        rodsRestart->fd = iRODSNt_bopen( restartFile, O_RDWR, 0644 );
+#endif
+        if ( rodsRestart->fd < 0 ) {
+            status = UNIX_FILE_OPEN_ERR - errno;
+            rodsLogError( LOG_ERROR, status,
+                          "openRestartFile: open error for %s", restartFile );
+            return status;
+        }
+        status = read( rodsRestart->fd, ( void * ) buf, MAX_NAME_LEN * 3 );
+        if ( status <= 0 ) {
+            close( rodsRestart->fd );
+            status = UNIX_FILE_READ_ERR - errno;
+            rodsLogError( LOG_ERROR, status,
+                          "openRestartFile: read error for %s", restartFile );
+            return status;
+        }
+
+        inptr = buf;
+        if ( getLineInBuf( &inptr, rodsRestart->collection, MAX_NAME_LEN ) < 0 ) {
+            rodsLog( LOG_ERROR,
+                     "openRestartFile: restartFile %s is empty", restartFile );
+            return USER_RESTART_FILE_INPUT_ERR;
+        }
+        if ( getLineInBuf( &inptr, tmpStr, MAX_NAME_LEN ) < 0 ) {
+            rodsLog( LOG_ERROR,
+                     "openRestartFile: restartFile %s has 1 only line", restartFile );
+            return USER_RESTART_FILE_INPUT_ERR;
+        }
+        rodsRestart->doneCnt = atoi( tmpStr );
+
+        if ( getLineInBuf( &inptr, rodsRestart->lastDonePath,
+                           MAX_NAME_LEN ) < 0 ) {
+            rodsLog( LOG_ERROR,
+                     "openRestartFile: restartFile %s has only 2 lines", restartFile );
+            return USER_RESTART_FILE_INPUT_ERR;
+        }
+
+        if ( getLineInBuf( &inptr, rodsRestart->oprType,
+                           NAME_LEN ) < 0 ) {
+            rodsLog( LOG_ERROR,
+                     "openRestartFile: restartFile %s has only 3 lines", restartFile );
+            return USER_RESTART_FILE_INPUT_ERR;
+        }
+
+        rodsRestart->restartState = PATH_MATCHING;
+        printf( "RestartFile %s opened\n", restartFile );
+        printf( "Restarting collection/directory = %s     File count %d\n",
+                rodsRestart->collection, rodsRestart->doneCnt );
+        printf( "File last completed = %s\n", rodsRestart->lastDonePath );
+    }
+    return 0;
+}
+
+int
+getLineInBuf( char **inbuf, char * outbuf, int bufLen ) {
+    char *inPtr, *outPtr;
+    int bytesCopied  = 0;
+    int c;
+
+    inPtr = *inbuf;
+    outPtr = outbuf;
+
+    while ( ( c = *inPtr ) != '\n' && c != EOF && bytesCopied < bufLen ) {
+        c = *inPtr;
+        if ( c == '\n' || c == EOF ) {
+            break;
+        }
+        *outPtr = c;
+        inPtr++;
+        outPtr++;
+        bytesCopied++;
+    }
+    *outPtr = '\0';
+    *inbuf = inPtr + 1;
+    return bytesCopied;
+}
+
+
+
+
+
+/* writeRestartFile - the restart file contain 4 lines:
+ *   line 1 - collection.
+ *   line 2 - doneCnt.
+ *   line 3 - lastDonePath
+ *   line 4 - oprType (BULK_OPR_KW or NON_BULK_OPR_KW);
+ */
+
+int
+writeRestartFile( rodsRestart_t * rodsRestart, char * lastDonePath ) {
+    char buf[MAX_NAME_LEN * 3];
+    int status;
+
+    rodsRestart->doneCnt = rodsRestart->curCnt;
+    rstrcpy( rodsRestart->lastDonePath, lastDonePath, MAX_NAME_LEN );
+    memset( buf, 0, MAX_NAME_LEN * 3 );
+    snprintf( buf, MAX_NAME_LEN * 3, "%s\n%d\n%s\n%s\n",
+              rodsRestart->collection, rodsRestart->doneCnt,
+              rodsRestart->lastDonePath, rodsRestart->oprType );
+
+    lseek( rodsRestart->fd, 0, SEEK_SET );
+    status = write( rodsRestart->fd, buf, MAX_NAME_LEN * 3 );
+    if ( status != MAX_NAME_LEN * 3 ) {
+        rodsLog( LOG_ERROR,
+                 "writeRestartFile: write error, errno = %d",
+                 errno );
+        return SYS_COPY_LEN_ERR - errno;
+    }
+    return 0;
+}
+
+int
+procAndWriteRestartFile( rodsRestart_t * rodsRestart, char * donePath ) {
+    int status;
+
+    if ( rodsRestart->fd <= 0 ) {
+        return 0;
+    }
+
+    rodsRestart->curCnt ++;
+    status = writeRestartFile( rodsRestart, donePath );
+
+    return status;
+}
+
+int
+setStateForRestart( rodsRestart_t * rodsRestart, rodsPath_t * targPath,
+                    rodsArguments_t * rodsArgs ) {
+    if ( rodsRestart->restartState & PATH_MATCHING ) {
+        /* check the restart collection */
+        if ( strstr( targPath->outPath, rodsRestart->collection ) != NULL ) {
+            /* just use the rodsRestart->collection because the
+             * targPath may be resolved into a different path */
+            rstrcpy( targPath->outPath, rodsRestart->collection, MAX_NAME_LEN );
+            rodsRestart->restartState |= MATCHED_RESTART_COLL;
+            rodsRestart->curCnt = 0;
+            if ( rodsArgs->verbose == True ) {
+                printf( "**** Scanning to Restart Operation in %s ****\n",
+                        targPath->outPath );
+            }
+        }
+        else {
+            /* take out MATCHED_RESTART_COLL */
+            if ( rodsArgs->verbose == True ) {
+                printf( "**** Skip Coll/dir %s ****\n",
+                        targPath->outPath );
+            }
+            rodsRestart->restartState = rodsRestart->restartState &
+                                        ( ~MATCHED_RESTART_COLL );
+        }
+    }
+    else if ( rodsRestart->fd > 0 ) {
+        /* just writing restart file */
+        rstrcpy( rodsRestart->collection, targPath->outPath,
+                 MAX_NAME_LEN );
+        rodsRestart->doneCnt = rodsRestart->curCnt = 0;
+    }
+    return 0;
+}
+
+int
+getPathStMode( const char* p ) {
+    struct stat statbuf;
+
+    if ( stat( p, &statbuf ) == 0 &&
+            ( statbuf.st_mode & S_IFREG ) ) {
+        return statbuf.st_mode;
+    }
+    else {
+        return -1;
+    }
+}
+
+int
+initAttriArrayOfBulkOprInp( bulkOprInp_t * bulkOprInp ) {
+    genQueryOut_t *attriArray;
+    int i;
+
+    if ( bulkOprInp == NULL ) {
+        return USER__NULL_INPUT_ERR;
+    }
+
+    attriArray = &bulkOprInp->attriArray;
+
+    attriArray->attriCnt = 3;
+
+    attriArray->sqlResult[0].attriInx = COL_DATA_NAME;
+    attriArray->sqlResult[0].len = MAX_NAME_LEN;
+    attriArray->sqlResult[0].value =
+        ( char * )malloc( MAX_NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+    bzero( attriArray->sqlResult[0].value,
+           MAX_NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+    attriArray->sqlResult[1].attriInx = COL_DATA_MODE;
+    attriArray->sqlResult[1].len = NAME_LEN;
+    attriArray->sqlResult[1].value =
+        ( char * )malloc( NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+    bzero( attriArray->sqlResult[1].value,
+           NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+    attriArray->sqlResult[2].attriInx = OFFSET_INX;
+    attriArray->sqlResult[2].len = NAME_LEN;
+    attriArray->sqlResult[2].value =
+        ( char * )malloc( NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+    bzero( attriArray->sqlResult[2].value,
+           NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+
+    if ( getValByKey( &bulkOprInp->condInput, REG_CHKSUM_KW ) != NULL ||
+            getValByKey( &bulkOprInp->condInput, VERIFY_CHKSUM_KW ) != NULL ) {
+        i = attriArray->attriCnt;
+        attriArray->sqlResult[i].attriInx = COL_D_DATA_CHECKSUM;
+        attriArray->sqlResult[i].len = NAME_LEN;
+        attriArray->sqlResult[i].value =
+            ( char * )malloc( NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+        bzero( attriArray->sqlResult[i].value,
+               NAME_LEN * MAX_NUM_BULK_OPR_FILES );
+        attriArray->attriCnt++;
+    }
+    attriArray->continueInx = -1;
+    return 0;
+}
+
+int
+fillAttriArrayOfBulkOprInp( char * objPath, int dataMode, char * inpChksum,
+                            int offset, bulkOprInp_t * bulkOprInp ) {
+    genQueryOut_t *attriArray;
+    int rowCnt;
+    sqlResult_t *chksum = NULL;
+
+    if ( bulkOprInp == NULL || objPath == NULL ) {
+        return USER__NULL_INPUT_ERR;
+    }
+
+    attriArray = &bulkOprInp->attriArray;
+
+    rowCnt = attriArray->rowCnt;
+
+    if ( rowCnt >= MAX_NUM_BULK_OPR_FILES ) {
+        return SYS_BULK_REG_COUNT_EXCEEDED;
+    }
+
+    chksum = getSqlResultByInx( attriArray, COL_D_DATA_CHECKSUM );
+    if ( inpChksum != NULL && strlen( inpChksum ) > 0 ) {
+        if ( chksum == NULL ) {
+            rodsLog( LOG_ERROR,
+                     "initAttriArrayOfBulkOprInp: getSqlResultByInx for COL_D_DATA_CHECKSUM failed" );
+            return UNMATCHED_KEY_OR_INDEX;
+        }
+        else {
+            rstrcpy( &chksum->value[NAME_LEN * rowCnt], inpChksum, NAME_LEN );
+        }
+    }
+    else {
+        if ( chksum != NULL ) {
+            chksum->value[NAME_LEN * rowCnt] = '\0';
+        }
+    }
+    rstrcpy( &attriArray->sqlResult[0].value[MAX_NAME_LEN * rowCnt],
+             objPath, MAX_NAME_LEN );
+    snprintf( &attriArray->sqlResult[1].value[NAME_LEN * rowCnt],
+              NAME_LEN, "%d", dataMode );
+    snprintf( &attriArray->sqlResult[2].value[NAME_LEN * rowCnt],
+              NAME_LEN, "%d", offset );
+
+    attriArray->rowCnt++;
+
+    return 0;
+}
+
+int
+getSpecCollTypeStr( specColl_t * specColl, char * outStr ) {
+    int i;
+
+    if ( specColl->collClass == NO_SPEC_COLL ) {
+        return SYS_UNMATCHED_SPEC_COLL_TYPE;
+    }
+    else if ( specColl->collClass == MOUNTED_COLL ) {
+        rstrcpy( outStr, MOUNT_POINT_STR, NAME_LEN );
+        return 0;
+    }
+    else if ( specColl->collClass == LINKED_COLL ) {
+        rstrcpy( outStr, LINK_POINT_STR, NAME_LEN );
+        return 0;
+    }
+    else {
+        for ( i = 0; i < NumStructFileType; i++ ) {
+            if ( specColl->type == StructFileTypeDef[i].type ) {
+                rstrcpy( outStr, StructFileTypeDef[i].typeName, NAME_LEN );
+                return 0;
+            }
+        }
+        rodsLog( LOG_ERROR,
+                 "getSpecCollTypeStr: unmatch specColl type %d", specColl->type );
+        return SYS_UNMATCHED_SPEC_COLL_TYPE;
+    }
+}
+
+unsigned int
+seedRandom() {
+    unsigned int seed;
+    const int random_fd = open( "/dev/urandom", O_RDONLY );
+    if ( random_fd == -1 ) {
+        rodsLog( LOG_ERROR, "seedRandom: failed to open /dev/urandom" );
+        return FILE_OPEN_ERR;
+    }
+    char buf[sizeof( seed )];
+    const ssize_t count = read( random_fd, &buf, sizeof( buf ) );
+    close( random_fd );
+    if ( count != sizeof( seed ) ) {
+        rodsLog( LOG_ERROR, "seedRandom: failed to read enough bytes from /dev/urandom" );
+        return FILE_READ_ERR;
+    }
+    memcpy( &seed, buf, sizeof( seed ) );
+
+#ifdef windows_platform
+    srand( seed );
+#else
+    srandom( seed );
+#endif
+
+    return 0;
+}
+
+/* Get the current time + offset , in the  form: 2006-10-25-10.52.43 */
+/*  offset is a string of the same form  */
+/*                                               0123456789012345678 */
+void
+getOffsetTimeStr( char *timeStr, const char *offSet ) {
+    time_t myTime;
+
+    myTime = time( NULL );
+    myTime += atoi( offSet );
+
+    snprintf( timeStr, TIME_LEN, "%d", ( uint ) myTime );
+}
 
 rodsLong_t
 getFileSize( char *myPath ) {
