@@ -1,0 +1,46 @@
+new iRODS C library
+~~~~~~~~~~~~~~~~~~
+
+icommands requirements:
+** Refactoring icommands to use this new library is not easy or clear.
+** The icommands + this new client lib create a circular dependency due to the fact
+** that icommands uses the new filesystem api. The filesystem api is built on things
+** in the new client lib.
+
+- RODS_REL_VERSION
+- RODS_API_VERSION
+- ACCESS_INHERIT - macro - icatDefines.h
+- ACCESS_NO_INHERIT - macro - icatDefines.h
+
+- checkDateFormat - rcMisc.h
+- getLocalTimeFromRodsTime - rcMisc.h
+- getNowStr - rcMisc.h
+- printErrorStack - rcMisc.h
+- printReleaseInfo - rcMisc.h
+- parseUserName - rcMisc.h
+- printGenQueryOut - rcMisc.h
+- fillGenQueryInpFromStrCond - rcMisc.h
+- showAttrNames - rcMisc.h
+  + localToUnixTime
+  + getAttrNameFromAttrId
+  + separateSelFuncFromAttr
+  + getSelVal
+  + getAttrIdFromAttrName
+  + getCondFromString
+
+- lsUtil.h
+- trimUtil.h
+- mcollUtil.h
+- mkdirUtil.h
+- cpUtil.h
+- phymvUtil.h
+- mvUtil.h
+- getUtil.h
+- lsUtil.h
+- replUtil.h
+- bunUtil.h
+- phybunUtil.h
+- fsckUtil.h
+
+- json.hpp
+- irods_resource_constants.hpp
